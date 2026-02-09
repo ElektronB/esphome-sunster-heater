@@ -137,7 +137,7 @@ void VevorHeater::check_uart_data() {
       
       // Check if we have enough bytes to determine frame length
       if (rx_buffer_.size() >= 4) {
-        uint8_t expected_length = (rx_buffer_[3] == HEATER_FRAME_LENGTH) ? 56 : 15;
+        uint8_t expected_length = (rx_buffer_[3] == HEATER_FRAME_LENGTH) ? 57 : 16;
         
         if (rx_buffer_.size() >= expected_length) {
           // Frame complete, process it
@@ -265,7 +265,7 @@ void VevorHeater::send_controller_frame() {
 }
 
 void VevorHeater::process_heater_frame(const std::vector<uint8_t> &frame) {
-  if (frame[3] == HEATER_FRAME_LENGTH && frame.size() >= 56) {
+  if (frame[3] == HEATER_FRAME_LENGTH && frame.size() >= 57) {
     // Long frame from heater
     ESP_LOGV(TAG, "Processing heater status frame");
     
@@ -281,7 +281,7 @@ void VevorHeater::process_heater_frame(const std::vector<uint8_t> &frame) {
     // Update all sensors
     update_sensors(frame);
     
-  } else if (frame[3] == CONTROLLER_FRAME_LENGTH && frame.size() >= 15) {
+  } else if (frame[3] == CONTROLLER_FRAME_LENGTH && frame.size() >= 16) {
     // Short frame (controller echo)
     ESP_LOGVV(TAG, "Received controller frame echo");
     // Usually just an echo of our own transmission
@@ -300,11 +300,13 @@ void VevorHeater::update_sensors(const std::vector<uint8_t> &frame) {
     power_level_sensor_->publish_state(power_level_raw * 10);
   }
   
-  // Input voltage (byte 11)
-  uint8_t voltage_raw = frame[11];
-  if (input_voltage_sensor_ && voltage_raw > 0) {
-    input_voltage_ = voltage_raw / 10.0f;
-    input_voltage_sensor_->publish_state(input_voltage_);
+  // Input voltage (bytes 10-11, uint16 big-endian / 10.0) - newer protocol
+  if (input_voltage_sensor_ && frame.size() > 11) {
+    uint16_t voltage_raw = read_uint16_be(frame, 10);
+    if (voltage_raw > 0) {
+      input_voltage_ = voltage_raw / 10.0f;
+      input_voltage_sensor_->publish_state(input_voltage_);
+    }
   }
   
   // Glow plug current (byte 13)
@@ -321,7 +323,7 @@ void VevorHeater::update_sensors(const std::vector<uint8_t> &frame) {
     cooling_down_sensor_->publish_state(cooling_down_);
   }
   
-  // Heat exchanger temperature (bytes 16-17) - Signed value for negative temps
+  // Heat exchanger temperature (bytes 16-17, int16 big-endian / 10.0) - newer protocol
   if (heat_exchanger_temperature_sensor_ && frame.size() > 17) {
     // Read as signed int16 to handle negative temperatures correctly
     int16_t temp_raw = static_cast<int16_t>(read_uint16_be(frame, 16));
