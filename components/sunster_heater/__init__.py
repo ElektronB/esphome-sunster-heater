@@ -305,7 +305,6 @@ async def to_code(config):
         ]
 
         binary_sensors_to_create = [
-            (CONF_COOLING_DOWN, "set_cooling_down_sensor"),
             (CONF_LOW_VOLTAGE_ERROR, "set_low_voltage_error_sensor"),
         ]
 
@@ -360,7 +359,6 @@ async def to_code(config):
             (CONF_TOTAL_CONSUMPTION, "set_total_consumption_sensor", sensor.new_sensor),
             (CONF_STATE, "set_state_sensor", text_sensor.new_text_sensor),
             (CONF_GLOW_PLUG_STATUS, "set_glow_plug_status_sensor", text_sensor.new_text_sensor),
-            (CONF_COOLING_DOWN, "set_cooling_down_sensor", binary_sensor.new_binary_sensor),
             (CONF_LOW_VOLTAGE_ERROR, "set_low_voltage_error_sensor", binary_sensor.new_binary_sensor),
         ]
 

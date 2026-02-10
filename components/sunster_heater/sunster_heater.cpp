@@ -641,6 +641,9 @@ void SunsterHeater::check_voltage_safety() {
     if (low_voltage_error_sensor_) {
       low_voltage_error_sensor_->publish_state(false);
     }
+  } else if (low_voltage_error_sensor_ && input_voltage_ > 0.0f && !voltage_error) {
+    // Publish "no error" when voltage is valid so the entity is not stuck as "unknown"
+    low_voltage_error_sensor_->publish_state(false);
   }
 }
 

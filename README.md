@@ -293,7 +293,7 @@ When `auto_sensors: true` (default), these sensors are automatically created:
 | Pump Frequency               | Fuel pump frequency           | Hz   | -            |
 | Glow Plug Status             | Glow plug phase (Preheat / Ignition / Off) | -    | -            |
 | State Duration               | Time in current state         | s    | Duration     |
-| Cooling Down                 | Cooling down status           | -    | -            |
+| Cooling Down                 | (Optional) Cooling flag; state already shows Stopping/Cooling | -    | -            |
 | Hourly Consumption           | Instantaneous fuel rate       | ml/h | -            |
 | Daily Consumption            | Total fuel consumed today     | ml   | -            |
 | Total Consumption            | Cumulative fuel consumption   | ml   | -            |
