@@ -299,7 +299,7 @@ class SunsterResetTotalConsumptionButton : public button::Button, public Compone
   SunsterHeater *heater_{nullptr};
 };
 
-// Switch component for heater power control (Manual mode only)
+// Switch component for heater power on/off (works in all modes; in Automatic, PI sets power level)
 class SunsterHeaterPowerSwitch : public switch_::Switch, public Component {
  public:
   void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
@@ -307,18 +307,13 @@ class SunsterHeaterPowerSwitch : public switch_::Switch, public Component {
  protected:
   void loop() override {
     Component::loop();
-    if (heater_ && heater_->is_manual_mode() && heater_->is_state_synced_once() && !initial_state_published_) {
+    if (heater_ && heater_->is_state_synced_once() && !initial_state_published_) {
       this->publish_state(heater_->get_heater_enabled());
       initial_state_published_ = true;
     }
   }
   void write_state(bool state) override {
     if (heater_) {
-      if (!heater_->is_manual_mode()) {
-        ESP_LOGW("sunster_heater", "Power switch only works in Manual mode");
-        this->publish_state(!state);
-        return;
-      }
       if (state) {
         heater_->turn_on();
       } else {
@@ -367,8 +362,12 @@ class SunsterControlModeSelect : public select::Select, public Component {
     if (heater_) {
       if (heater_->is_manual_mode()) {
         this->publish_state("Manual");
+      } else if (heater_->is_automatic_mode()) {
+        this->publish_state("Automatic");
       } else if (heater_->is_antifreeze_mode()) {
         this->publish_state("Antifreeze");
+      } else {
+        this->publish_state("Manual");
       }
     }
   }
@@ -378,6 +377,8 @@ class SunsterControlModeSelect : public select::Select, public Component {
     if (heater_) {
       if (value == "Manual") {
         heater_->set_control_mode(ControlMode::MANUAL);
+      } else if (value == "Automatic") {
+        heater_->set_control_mode(ControlMode::AUTOMATIC);
       } else if (value == "Antifreeze") {
         heater_->set_control_mode(ControlMode::ANTIFREEZE);
       }

@@ -38,6 +38,7 @@ void SunsterHeater::setup() {
   this->current_state_ = HeaterState::OFF;
   this->heater_enabled_ = false;
   this->antifreeze_active_ = false;
+  this->control_mode_ = ControlMode::MANUAL;  // Default after boot: manual, so start works; switch via "Heizung Modus" if needed
   this->power_level_ = static_cast<uint8_t>(default_power_percent_ / 10.0f);  // Convert % to 1-10 scale
   this->last_send_time_ = millis();
   this->last_received_time_ = millis();
@@ -872,9 +873,10 @@ void SunsterHeater::turn_on() {
     }
   }
   
-  // Check voltage before allowing start
-  if (input_voltage_ < min_voltage_start_) {
-    ESP_LOGW(TAG, "Cannot start heater: voltage too low (%.1fV < %.1fV)", 
+  // Check voltage before allowing start (only if we have a valid reading from heater)
+  // When heater is off it may send 0 V or no frame yet – then don't block start
+  if (input_voltage_ > 0.0f && input_voltage_ < min_voltage_start_) {
+    ESP_LOGW(TAG, "Cannot start heater: voltage too low (%.1fV < %.1fV)",
              input_voltage_, min_voltage_start_);
     low_voltage_error_ = true;
     if (low_voltage_error_sensor_) {
