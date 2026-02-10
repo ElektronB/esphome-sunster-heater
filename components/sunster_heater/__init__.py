@@ -28,13 +28,13 @@ from esphome.const import (
 AUTO_LOAD = ["sensor", "text_sensor", "binary_sensor", "number", "button", "select", "switch"]
 DEPENDENCIES = ["uart"]
 
-vevor_heater_ns = cg.esphome_ns.namespace("vevor_heater")
-VevorHeater = vevor_heater_ns.class_("VevorHeater", cg.PollingComponent)
-VevorInjectedPerPulseNumber = vevor_heater_ns.class_("VevorInjectedPerPulseNumber", number.Number, cg.Component)
-VevorResetTotalConsumptionButton = vevor_heater_ns.class_("VevorResetTotalConsumptionButton", button.Button, cg.Component)
-VevorControlModeSelect = vevor_heater_ns.class_("VevorControlModeSelect", select.Select, cg.Component)
-VevorHeaterPowerSwitch = vevor_heater_ns.class_("VevorHeaterPowerSwitch", switch.Switch, cg.Component)
-VevorHeaterPowerLevelNumber = vevor_heater_ns.class_("VevorHeaterPowerLevelNumber", number.Number, cg.Component)
+sunster_heater_ns = cg.esphome_ns.namespace("sunster_heater")
+SunsterHeater = sunster_heater_ns.class_("SunsterHeater", cg.PollingComponent)
+SunsterInjectedPerPulseNumber = sunster_heater_ns.class_("SunsterInjectedPerPulseNumber", number.Number, cg.Component)
+SunsterResetTotalConsumptionButton = sunster_heater_ns.class_("SunsterResetTotalConsumptionButton", button.Button, cg.Component)
+SunsterControlModeSelect = sunster_heater_ns.class_("SunsterControlModeSelect", select.Select, cg.Component)
+SunsterHeaterPowerSwitch = sunster_heater_ns.class_("SunsterHeaterPowerSwitch", switch.Switch, cg.Component)
+SunsterHeaterPowerLevelNumber = sunster_heater_ns.class_("SunsterHeaterPowerLevelNumber", number.Number, cg.Component)
 
 # Configuration keys
 CONF_AUTO_SENSORS = "auto_sensors"
@@ -56,7 +56,7 @@ CONTROL_MODE_MANUAL = "manual"
 CONTROL_MODE_AUTOMATIC = "automatic"
 CONTROL_MODE_ANTIFREEZE = "antifreeze"
 
-# Sensor configuration keys - removed CONF_TEMPERATURE (duplicate)
+# Sensor configuration keys
 CONF_INPUT_VOLTAGE = "input_voltage"
 CONF_STATE = "state"
 CONF_POWER_LEVEL = "power_level"
@@ -75,7 +75,7 @@ CONF_LOW_VOLTAGE_ERROR = "low_voltage_error"
 UNIT_MILLILITERS = "ml"
 UNIT_MILLILITERS_PER_HOUR = "ml/h"
 
-# Simplified sensor schemas with good defaults - removed duplicate temperature sensor
+# Simplified sensor schemas with good defaults
 SENSOR_SCHEMAS = {
     CONF_INPUT_VOLTAGE: sensor.sensor_schema(
         unit_of_measurement=UNIT_VOLT,
@@ -150,7 +150,7 @@ SENSOR_SCHEMAS = {
 CONFIG_SCHEMA = cv.All(
     cv.Schema(
         {
-            cv.GenerateID(): cv.declare_id(VevorHeater),
+            cv.GenerateID(): cv.declare_id(SunsterHeater),
             cv.Required(CONF_UART_ID): cv.use_id(uart.UARTComponent),
             cv.Optional(CONF_AUTO_SENSORS, default=True): cv.boolean,
             cv.Optional(CONF_CONTROL_MODE, default=CONTROL_MODE_MANUAL): cv.enum(
@@ -173,7 +173,6 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional("min_voltage_operate", default=11.4): cv.float_range(
                 min=9.0, max=14.0
             ),
-            # Antifreeze mode temperature thresholds
             cv.Optional("antifreeze_temp_on", default=2.0): cv.float_range(
                 min=-20.0, max=20.0
             ),
@@ -186,7 +185,6 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional("antifreeze_temp_off", default=9.0): cv.float_range(
                 min=-20.0, max=30.0
             ),
-            # Individual sensor overrides (optional) - removed duplicate temperature sensor
             cv.Optional(CONF_INPUT_VOLTAGE): SENSOR_SCHEMAS[CONF_INPUT_VOLTAGE],
             cv.Optional(CONF_STATE): SENSOR_SCHEMAS[CONF_STATE],
             cv.Optional(CONF_POWER_LEVEL): SENSOR_SCHEMAS[CONF_POWER_LEVEL],
@@ -202,9 +200,8 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_HOURLY_CONSUMPTION): SENSOR_SCHEMAS[CONF_HOURLY_CONSUMPTION],
             cv.Optional(CONF_DAILY_CONSUMPTION): SENSOR_SCHEMAS[CONF_DAILY_CONSUMPTION],
             cv.Optional(CONF_TOTAL_CONSUMPTION): SENSOR_SCHEMAS[CONF_TOTAL_CONSUMPTION],
-            # Number component for injected per pulse
             cv.Optional(CONF_INJECTED_PER_PULSE_NUMBER): number.number_schema(
-                VevorInjectedPerPulseNumber,
+                SunsterInjectedPerPulseNumber,
                 unit_of_measurement=UNIT_MILLILITERS,
                 icon="mdi:eyedropper",
                 entity_category="config",
@@ -213,26 +210,22 @@ CONFIG_SCHEMA = cv.All(
                 cv.Optional("max_value", default=1.0): cv.float_,
                 cv.Optional("step", default=0.001): cv.float_,
             }),
-            # Button to reset total consumption
             cv.Optional(CONF_RESET_TOTAL_CONSUMPTION_BUTTON): button.button_schema(
-                VevorResetTotalConsumptionButton,
+                SunsterResetTotalConsumptionButton,
                 icon="mdi:restart",
                 entity_category="config",
             ),
-            # Select for control mode
             cv.Optional(CONF_CONTROL_MODE_SELECT): select.select_schema(
-                VevorControlModeSelect,
+                SunsterControlModeSelect,
                 icon="mdi:format-list-bulleted",
                 entity_category="config",
             ),
-            # Switch for heater power control
             cv.Optional(CONF_POWER_SWITCH): switch.switch_schema(
-                VevorHeaterPowerSwitch,
+                SunsterHeaterPowerSwitch,
                 icon="mdi:fire",
             ),
-            # Number for power level control
             cv.Optional(CONF_POWER_LEVEL_NUMBER): number.number_schema(
-                VevorHeaterPowerLevelNumber,
+                SunsterHeaterPowerLevelNumber,
                 unit_of_measurement=UNIT_PERCENT,
                 icon="mdi:percent",
             ).extend({
@@ -257,39 +250,39 @@ async def to_code(config):
     # Set control mode
     control_mode = config[CONF_CONTROL_MODE]
     if control_mode == CONTROL_MODE_AUTOMATIC:
-        cg.add(var.set_control_mode(cg.RawExpression("esphome::vevor_heater::ControlMode::AUTOMATIC")))
+        cg.add(var.set_control_mode(cg.RawExpression("esphome::sunster_heater::ControlMode::AUTOMATIC")))
     elif control_mode == CONTROL_MODE_ANTIFREEZE:
-        cg.add(var.set_control_mode(cg.RawExpression("esphome::vevor_heater::ControlMode::ANTIFREEZE")))
+        cg.add(var.set_control_mode(cg.RawExpression("esphome::sunster_heater::ControlMode::ANTIFREEZE")))
     else:
-        cg.add(var.set_control_mode(cg.RawExpression("esphome::vevor_heater::ControlMode::MANUAL")))
-    
+        cg.add(var.set_control_mode(cg.RawExpression("esphome::sunster_heater::ControlMode::MANUAL")))
+
     # Set default power percent
     cg.add(var.set_default_power_percent(config[CONF_DEFAULT_POWER_PERCENT]))
-    
+
     # Set injected per pulse
     cg.add(var.set_injected_per_pulse(config[CONF_INJECTED_PER_PULSE]))
-    
+
     # Passive sniff mode (log RX/decode only, never send)
     cg.add(var.set_passive_sniff_mode(config[CONF_PASSIVE_SNIFF]))
-    
+
     # Set polling interval
     cg.add(var.set_polling_interval(config[CONF_POLLING_INTERVAL]))
-    
+
     # Set voltage safety thresholds
     cg.add(var.set_min_voltage_start(config["min_voltage_start"]))
     cg.add(var.set_min_voltage_operate(config["min_voltage_operate"]))
-    
+
     # Set antifreeze temperature thresholds
     cg.add(var.set_antifreeze_temp_on(config["antifreeze_temp_on"]))
     cg.add(var.set_antifreeze_temp_medium(config["antifreeze_temp_medium"]))
     cg.add(var.set_antifreeze_temp_low(config["antifreeze_temp_low"]))
     cg.add(var.set_antifreeze_temp_off(config["antifreeze_temp_off"]))
-    
+
     # Set time component if provided
     if CONF_TIME_ID in config:
         time_component = await cg.get_variable(config[CONF_TIME_ID])
         cg.add(var.set_time_component(time_component))
-    
+
     # Set external temperature sensor if provided
     if CONF_EXTERNAL_TEMPERATURE_SENSOR in config:
         external_sensor = await cg.get_variable(config[CONF_EXTERNAL_TEMPERATURE_SENSOR])
@@ -298,7 +291,6 @@ async def to_code(config):
     # Auto-create sensors if enabled
     if config[CONF_AUTO_SENSORS]:
         sensors_to_create = [
-            # Removed duplicate (CONF_TEMPERATURE, "set_temperature_sensor"),
             (CONF_INPUT_VOLTAGE, "set_input_voltage_sensor"),
             (CONF_POWER_LEVEL, "set_power_level_sensor"),
             (CONF_FAN_SPEED, "set_fan_speed_sensor"),
@@ -320,54 +312,46 @@ async def to_code(config):
             (CONF_LOW_VOLTAGE_ERROR, "set_low_voltage_error_sensor"),
         ]
 
-        # Create regular sensors
         for sensor_key, setter_method in sensors_to_create:
             if sensor_key in config:
-                # Use user-provided configuration
                 sens_config = config[sensor_key]
             else:
-                # Use default configuration with automatic naming and ID
                 sens_config = {
                     CONF_ID: cg.RawExpression(f"{config[CONF_ID]}_sensor_{sensor_key}"),
-                    CONF_NAME: f"Vevor Heater {sensor_key.replace('_', ' ').title()}"
+                    CONF_NAME: f"Sunster Heater {sensor_key.replace('_', ' ').title()}"
                 }
-                # Apply the schema to get proper defaults
                 sens_config = SENSOR_SCHEMAS[sensor_key](sens_config)
-            
+
             sens = await sensor.new_sensor(sens_config)
             cg.add(getattr(var, setter_method)(sens))
 
-        # Create text sensors
         for sensor_key, setter_method in text_sensors_to_create:
             if sensor_key in config:
                 sens_config = config[sensor_key]
             else:
                 sens_config = {
                     CONF_ID: cg.RawExpression(f"{config[CONF_ID]}_text_sensor_{sensor_key}"),
-                    CONF_NAME: f"Vevor Heater {sensor_key.replace('_', ' ').title()}"
+                    CONF_NAME: f"Sunster Heater {sensor_key.replace('_', ' ').title()}"
                 }
                 sens_config = SENSOR_SCHEMAS[sensor_key](sens_config)
-            
+
             sens = await text_sensor.new_text_sensor(sens_config)
             cg.add(getattr(var, setter_method)(sens))
 
-        # Create binary sensors
         for sensor_key, setter_method in binary_sensors_to_create:
             if sensor_key in config:
                 sens_config = config[sensor_key]
             else:
                 sens_config = {
                     CONF_ID: cg.RawExpression(f"{config[CONF_ID]}_binary_sensor_{sensor_key}"),
-                    CONF_NAME: f"Vevor Heater {sensor_key.replace('_', ' ').title()}"
+                    CONF_NAME: f"Sunster Heater {sensor_key.replace('_', ' ').title()}"
                 }
                 sens_config = SENSOR_SCHEMAS[sensor_key](sens_config)
-            
+
             sens = await binary_sensor.new_binary_sensor(sens_config)
             cg.add(getattr(var, setter_method)(sens))
     else:
-        # Manual sensor configuration
         sensor_configs = [
-            # Removed duplicate (CONF_TEMPERATURE, "set_temperature_sensor", sensor.new_sensor),
             (CONF_INPUT_VOLTAGE, "set_input_voltage_sensor", sensor.new_sensor),
             (CONF_POWER_LEVEL, "set_power_level_sensor", sensor.new_sensor),
             (CONF_FAN_SPEED, "set_fan_speed_sensor", sensor.new_sensor),
@@ -392,26 +376,26 @@ async def to_code(config):
     if CONF_INJECTED_PER_PULSE_NUMBER in config:
         num_config = config[CONF_INJECTED_PER_PULSE_NUMBER]
         num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
-        cg.add(num.set_vevor_heater(var))
+        cg.add(num.set_sunster_heater(var))
         cg.add(var.set_injected_per_pulse_number(num))
-    
+
     # Button component for resetting total consumption
     if CONF_RESET_TOTAL_CONSUMPTION_BUTTON in config:
         btn = await button.new_button(config[CONF_RESET_TOTAL_CONSUMPTION_BUTTON])
-        cg.add(btn.set_vevor_heater(var))
-    
+        cg.add(btn.set_sunster_heater(var))
+
     # Select component for control mode
     if CONF_CONTROL_MODE_SELECT in config:
-        sel = await select.new_select(config[CONF_CONTROL_MODE_SELECT], options=["Manual", "Antifreeze"])  # "Automatic" commented out
-        cg.add(sel.set_vevor_heater(var))
-    
+        sel = await select.new_select(config[CONF_CONTROL_MODE_SELECT], options=["Manual", "Antifreeze"])
+        cg.add(sel.set_sunster_heater(var))
+
     # Switch component for heater power
     if CONF_POWER_SWITCH in config:
         sw = await switch.new_switch(config[CONF_POWER_SWITCH])
-        cg.add(sw.set_vevor_heater(var))
-    
+        cg.add(sw.set_sunster_heater(var))
+
     # Number component for power level
     if CONF_POWER_LEVEL_NUMBER in config:
         num_config = config[CONF_POWER_LEVEL_NUMBER]
         num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
-        cg.add(num.set_vevor_heater(var))
+        cg.add(num.set_sunster_heater(var))

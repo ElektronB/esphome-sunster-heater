@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the ESPHome Vevor Heater library will be documented in this file.
+All notable changes to the ESPHome Sunster Heater library will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -56,9 +56,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0] - 2025-10-15
 
 ### Added
-- Initial release of ESPHome Vevor Heater library
+- Initial release of ESPHome Sunster Heater library (refactored from Vevor)
 - **Core Features**:
-  - UART communication with Vevor diesel heaters (4800 baud)
+  - UART communication with Sunster/compatible diesel heaters (4800 baud)
   - Manual control mode with power level adjustment (10-100%)
   - Automatic sensor creation with sensible defaults
   - Home Assistant integration
@@ -130,7 +130,7 @@ No migration needed - fully backward compatible with v1.1.0.
 ```yaml
 # Old (v1.0.0) - REMOVE THIS
 sensor:
-  - platform: vevor_heater
+  - platform: sunster_heater
     temperature:
       name: "Heater Temperature"
 
@@ -153,6 +153,6 @@ below: 50.0  # Correct value
 
 ## Support
 
-For bug reports and feature requests, please open an issue on [GitHub](https://github.com/zatakon/esphome-vevor-heater/issues).
+For bug reports and feature requests, please open an issue on [GitHub](https://github.com/ElektronB/esphome-sunster-heater/issues).
 
 For protocol details and reverse engineering, see [vevor_heater_control](https://github.com/zatakon/vevor_heater_control).

@@ -1,10 +1,10 @@
-# ESPHome Vevor Heater Library
+# ESPHome Sunster Heater Library
 
 [![ESPHome](https://img.shields.io/badge/ESPHome-Compatible-blue)](https://esphome.io)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-Compatible-green)](https://www.home-assistant.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-An easy-to-use ESPHome library for controlling Vevor diesel heaters with full Home Assistant integration. Based on the original protocol reverse-engineering work from the [vevor_heater_control](https://github.com/zatakon/vevor_heater_control) project. Please visit that if you are interested - there are still some unknowns in the protocol and I will be glad for help. 
+An easy-to-use ESPHome library for controlling Sunster (and protocol-compatible) diesel heaters with full Home Assistant integration. The protocol is based on reverse-engineering work from the [vevor_heater_control](https://github.com/zatakon/vevor_heater_control) project; Sunster heaters use a compatible bus protocol. 
 
 > [!WARNING]
 > **This library is under active development!** Major changes are expected, and future versions may introduce breaking changes. Current configurations may not be compatible with upcoming releases. Please pin to a specific version if you need stability.
@@ -43,8 +43,7 @@ I tested functionality briefly. Please report bugs if you find them.
 ## Hardware Requirements
 
 ### Supported Heaters
-- Vevor diesel heaters (model XMZ-D2 2 kW, 5 kW tested)
-- Other heaters using the same protocol may work
+- Sunster diesel heaters and other heaters using the same/compatible protocol (e.g. XMZ-D2 2 kW, 5 kW style)
 
 ### ESP32 Board
 - ESP32-C3, ESP32, ESP32-S2, ESP32-S3
@@ -52,14 +51,14 @@ I tested functionality briefly. Please report bugs if you find them.
 
 ### Connection Circuit
 
-**Important**: The Vevor bus operates at ~5V with high noise. **DO NOT** connect directly to ESP32 pins!
+**Important**: The heater bus operates at ~5V with high noise. **DO NOT** connect directly to ESP32 pins!
 
 Be careful and connect the RX transistor to the 3.3V rail, not 5V. \
 **Double check the transistor's** pinout. \
 Feel free to use any pin for TX and RX. \
 **Put pullup resistor between data line and 5V**
 
-![Connection ESP32 to Vevor](https://github.com/zatakon/vevor_heater_control/blob/main/docs/images/vevor_heater_esp32.PNG?raw=true)
+![Connection ESP32 to heater](https://github.com/zatakon/vevor_heater_control/blob/main/docs/images/vevor_heater_esp32.PNG?raw=true)
 
 Refer to the original project's [hardware documentation](https://github.com/zatakon/vevor_heater_control#4-hardware) for more informations.
 
@@ -71,8 +70,8 @@ This library uses semantic versioning. The version is embedded in your ESPHome d
 esphome:
   name: ${friendly_name}
   project:
-    name: "zatakon.vevor-heater"
-    version: "1.2.1"  # Current library version
+    name: "esphome-sunster-heater"
+    version: "1.0.0"  # Current library version
 ```
 
 The version number appears in:
@@ -80,29 +79,24 @@ The version number appears in:
 - ESPHome dashboard
 - Device logs
 
-**Current Version: 1.2.0** - Daily consumption sensor fix
+**Current Version: 1.0.0**
 
-### Using Different Versions
+### Using the component
 
-**Latest stable release (recommended):**
+**Local / this repo:**
 ```yaml
 external_components:
-  - source: github://zatakon/esphome-vevor-heater
-    components: [vevor_heater]
+  - source: .
+    components: [sunster_heater]
 ```
 
-**Specific version (for stability):**
+**With local components path:**
 ```yaml
 external_components:
-  - source: github://zatakon/esphome-vevor-heater@v1.2.1
-    components: [vevor_heater]
-```
-
-**Development branch (latest features, may be unstable):**
-```yaml
-external_components:
-  - source: github://zatakon/esphome-vevor-heater@develop
-    components: [vevor_heater]
+  - source:
+      type: local
+      path: components
+    components: [sunster_heater]
 ```
 
 ## Quick Start
@@ -119,8 +113,8 @@ In manual mode, the heater runs at a fixed power level that you control:
 ```yaml
 # Add the library
 external_components:
-  - source: github://zatakon/esphome-vevor-heater
-    components: [vevor_heater]
+  - source: .
+    components: [sunster_heater]
 
 # UART configuration
 uart:
@@ -134,7 +128,7 @@ uart:
   baud_rate: 4800
 
 # Heater component - creates all sensors automatically!
-vevor_heater:
+sunster_heater:
   id: my_heater
   uart_id: heater_uart
   control_mode: manual           # Manual mode (default)
@@ -204,7 +198,7 @@ uart:
   baud_rate: 4800
 
 # Heater with antifreeze mode
-vevor_heater:
+sunster_heater:
   id: my_heater
   uart_id: heater_uart
   external_temperature_sensor: room_temp  # MANDATORY for antifreeze mode
@@ -261,7 +255,7 @@ uart:
   baud_rate: 4800
 
 # Heater with automatic temperature control
-vevor_heater:
+sunster_heater:
   id: my_heater
   uart_id: heater_uart
   control_mode: automatic        # Automatic temperature control
@@ -278,9 +272,9 @@ Will be implemented
 
 <!-- ```yaml
 climate:
-  - platform: vevor_heater
+  - platform: sunster_heater
     name: "Workshop Climate"
-    vevor_heater_id: my_heater
+    sunster_heater_id: my_heater
     min_temperature: 5
     max_temperature: 35
 ``` -->
@@ -314,7 +308,7 @@ The library includes accurate fuel consumption monitoring with persistent storag
 - **Configurable Calibration**: Default 0.022 ml per pump pulse, adjustable via configuration or HA number entity
 
 ```yaml
-vevor_heater:
+sunster_heater:
   id: my_heater
   uart_id: heater_uart
   injected_per_pulse: 0.022  # Adjust based on your heater model
@@ -340,7 +334,7 @@ The fuel counter automatically resets daily consumption at midnight and saves to
 Configure temperature thresholds for antifreeze protection:
 
 ```yaml
-vevor_heater:
+sunster_heater:
   id: my_heater
   uart_id: heater_uart
   external_temperature_sensor: room_temp
@@ -384,7 +378,7 @@ The heater automatically turns ON at 80% power when temperature falls below `ant
 **Example Configuration for Garage Protection:**
 
 ```yaml
-vevor_heater:
+sunster_heater:
   id: garage_heater
   uart_id: heater_uart
   control_mode: antifreeze
@@ -409,7 +403,7 @@ vevor_heater:
 Add direct control components for mode selection and power control:
 
 ```yaml
-vevor_heater:
+sunster_heater:
   id: my_heater
   uart_id: heater_uart
   
@@ -431,7 +425,7 @@ vevor_heater:
 Configure voltage thresholds for safe operation:
 
 ```yaml
-vevor_heater:
+sunster_heater:
   id: my_heater
   uart_id: heater_uart
   
@@ -445,7 +439,7 @@ The heater will refuse to start below `min_voltage_start` and will shut down if 
 ### Custom Sensor Names
 
 ```yaml
-vevor_heater:
+sunster_heater:
   id: my_heater
   uart_id: heater_uart
   # Override specific sensor names
@@ -467,7 +461,7 @@ You can use any [ESPHome temperature sensor](https://esphome.io/components/#envi
 Then link it to the heater:
 
 ```yaml
-vevor_heater:
+sunster_heater:
   id: my_heater
   uart_id: heater_uart
   external_temperature_sensor: room_temp
@@ -476,7 +470,7 @@ vevor_heater:
 ### Disable Auto-Sensors (Manual Mode)
 
 ```yaml
-vevor_heater:
+sunster_heater:
   id: my_heater
   uart_id: heater_uart
   auto_sensors: false
@@ -560,7 +554,7 @@ float temp = id(my_heater).get_current_temperature();
 
 ```yaml
 # Manual mode with external temperature sensor for display only
-vevor_heater:
+sunster_heater:
   id: my_heater
   uart_id: heater_uart
   control_mode: manual
@@ -589,7 +583,7 @@ number:
 
 ```yaml
 # Automatic mode with climate entity
-vevor_heater:
+sunster_heater:
   id: my_heater
   uart_id: heater_uart
   control_mode: automatic
@@ -598,9 +592,9 @@ vevor_heater:
   external_temperature_sensor: room_temp
 
 climate:
-  - platform: vevor_heater
+  - platform: sunster_heater
     name: "Workshop Thermostat"
-    vevor_heater_id: my_heater
+    sunster_heater_id: my_heater
     min_temperature: 5
     max_temperature: 35
 ```
@@ -648,12 +642,12 @@ automation:
 logger:
   level: DEBUG
   logs:
-    vevor_heater: VERY_VERBOSE
+    sunster_heater: VERY_VERBOSE
 ```
 
 ## Protocol Information
 
-This library implements the Vevor heater communication protocol:
+This library implements the Sunster/compatible heater communication protocol:
 - **Baud Rate**: 4800
 - **Frame Format**: Custom binary protocol
 - **Communication**: Half-duplex, controller-initiated
@@ -683,7 +677,7 @@ MIT License - see LICENSE file for details.
 ## Support the Project
 
 For issues and questions:
-1. Check existing [GitHub Issues](https://github.com/zatakon/esphome-vevor-heater/issues)
+1. Check existing [GitHub Issues](https://github.com/ElektronB/esphome-sunster-heater/issues)
 2. Create a new issue with:
    - ESPHome configuration
    - Debug logs
@@ -698,7 +692,7 @@ Your support helps me dedicate more time to improving this project, adding new f
 
 ### Interested in the Protocol?
 
-Check out the [**vevor_heater_control**](https://github.com/zatakon/vevor_heater_control) repository for reverse engineering details, protocol documentation, and help with adding new functions to this library. Contributions and discoveries are always welcome! 🔧
+Check out the [**vevor_heater_control**](https://github.com/zatakon/vevor_heater_control) repository for protocol details and reverse engineering. Contributions and discoveries are welcome! 🔧
 
 Thank you for using this library and being part of the community! 🎉
 

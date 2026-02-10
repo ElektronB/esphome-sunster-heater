@@ -4,15 +4,15 @@ substitutions:
 
 # Add the library
 external_components:
-  - source: github://zatakon/esphome-vevor-heater@develop
-    components: [vevor_heater]
+  - source: .
+    components: [sunster_heater]
 
 esphome:
   name: ${friendly_name}
   friendly_name: ${friendly_name}
   project:
-    name: "zatakon.vevor-heater"
-    version: "1.3.0"
+    name: "esphome-sunster-heater"
+    version: "1.0.0"
 
 esp32:
   board: esp32-c3-devkitm-1
@@ -49,7 +49,7 @@ web_server:
   local: True
   port: 80
 
-# UART configuration for Vevor heater
+# UART configuration for Sunster heater
 uart:
   - id: heater_serial
     rx_pin: 
@@ -62,7 +62,7 @@ uart:
 
 # Main heater component with automatic sensor creation
 # Using MANUAL mode
-vevor_heater:
+sunster_heater:
   id: my_heater
   uart_id: heater_serial
   # passive_sniff: true          # Optional: only log RX frames + decode attempts, never send (for protocol analysis with OEM on bus)

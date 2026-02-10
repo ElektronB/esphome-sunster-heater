@@ -1,4 +1,4 @@
-# Minimal Vevor Heater Configuration
+# Minimal Sunster Heater Configuration
 # Just add these few lines to get started!
 
 esphome:
@@ -23,8 +23,8 @@ captive_portal:
 
 # Add the library
 external_components:
-  - source: github://zatakon/esphome-vevor-heater@v1.3.0
-    components: [vevor_heater]
+  - source: .
+    components: [sunster_heater]
 
 # UART for heater communication
 uart:
@@ -38,12 +38,11 @@ uart:
   baud_rate: 4800
 
 # That's it! This creates all sensors automatically
-vevor_heater:
+sunster_heater:
   id: my_heater
   uart_id: heater_uart
   # Everything else is automatic with good defaults
-  
-  # Optional: Add integrated power switch (v1.3.0+)
+
   power_switch:
     name: "Heater"
 

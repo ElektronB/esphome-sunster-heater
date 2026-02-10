@@ -1,4 +1,4 @@
-#include "vevor_heater.h"
+#include "sunster_heater.h"
 #include "esphome/core/log.h"
 #include "esphome/core/helpers.h"
 #include "esphome/core/time.h"
@@ -10,7 +10,7 @@
 #include <string>
 
 namespace esphome {
-namespace vevor_heater {
+namespace sunster_heater {
 
 // Helper function for checksum calculation
 uint8_t calculate_checksum(const std::vector<uint8_t> &frame) {
@@ -25,8 +25,8 @@ uint8_t calculate_checksum(const std::vector<uint8_t> &frame) {
   return static_cast<uint8_t>(sum % 256);
 }
 
-void VevorHeater::setup() {
-  ESP_LOGCONFIG(TAG, "Setting up Vevor Heater...");
+void SunsterHeater::setup() {
+  ESP_LOGCONFIG(TAG, "Setting up Sunster Heater...");
   
   if (!this->parent_) {
     ESP_LOGE(TAG, "UART parent not set!");
@@ -56,7 +56,7 @@ void VevorHeater::setup() {
     hourly_consumption_sensor_->publish_state(0.0f);
   }
   
-  ESP_LOGCONFIG(TAG, "Vevor Heater setup completed");
+  ESP_LOGCONFIG(TAG, "Sunster Heater setup completed");
   ESP_LOGCONFIG(TAG, "Control mode: %s", control_mode_ == ControlMode::AUTOMATIC ? "Automatic" : "Manual");
   ESP_LOGCONFIG(TAG, "Default power level: %.0f%%", default_power_percent_);
   ESP_LOGCONFIG(TAG, "Injected per pulse: %.2f ml", injected_per_pulse_);
@@ -72,7 +72,7 @@ void VevorHeater::setup() {
   }
 }
 
-void VevorHeater::update() {
+void SunsterHeater::update() {
   // Update external temperature reading if sensor is available
   if (external_temperature_sensor_ != nullptr && external_temperature_sensor_->has_state()) {
     external_temperature_ = external_temperature_sensor_->state;
@@ -122,7 +122,7 @@ void VevorHeater::update() {
   }
 }
 
-void VevorHeater::check_uart_data() {
+void SunsterHeater::check_uart_data() {
   while (this->available()) {
     uint8_t byte;
     this->read_byte(&byte);
@@ -183,7 +183,7 @@ void VevorHeater::check_uart_data() {
   }
 }
 
-bool VevorHeater::validate_frame(const std::vector<uint8_t> &frame, uint8_t expected_length) {
+bool SunsterHeater::validate_frame(const std::vector<uint8_t> &frame, uint8_t expected_length) {
   if (frame.size() != expected_length) {
     ESP_LOGV(TAG, "Frame length mismatch: expected %d, got %d", expected_length, frame.size());
     return false;
@@ -211,7 +211,7 @@ bool VevorHeater::validate_frame(const std::vector<uint8_t> &frame, uint8_t expe
   return true;
 }
 
-void VevorHeater::log_frame_raw(const char* direction, const std::vector<uint8_t> &frame) {
+void SunsterHeater::log_frame_raw(const char* direction, const std::vector<uint8_t> &frame) {
   if (frame.empty()) return;
   std::string hex;
   hex.reserve(frame.size() * 3 + 1);
@@ -224,7 +224,7 @@ void VevorHeater::log_frame_raw(const char* direction, const std::vector<uint8_t
   ESP_LOGI(TAG, "[%s] raw (%zu bytes): %s", direction, frame.size(), hex.c_str());
 }
 
-void VevorHeater::log_decode_attempt(const std::vector<uint8_t> &frame, uint8_t expected_length) {
+void SunsterHeater::log_decode_attempt(const std::vector<uint8_t> &frame, uint8_t expected_length) {
   if (frame.size() < 4) return;
   uint8_t calc_csum = calculate_checksum(frame);
   uint8_t recv_csum = frame[frame.size() - 1];
@@ -250,7 +250,7 @@ void VevorHeater::log_decode_attempt(const std::vector<uint8_t> &frame, uint8_t 
   }
 }
 
-void VevorHeater::send_controller_frame() {
+void SunsterHeater::send_controller_frame() {
   std::vector<uint8_t> frame;
   
   // Build controller frame
@@ -318,7 +318,7 @@ void VevorHeater::send_controller_frame() {
            YESNO(heater_enabled_), power_level_, frame[9]);
 }
 
-void VevorHeater::process_heater_frame(const std::vector<uint8_t> &frame) {
+void SunsterHeater::process_heater_frame(const std::vector<uint8_t> &frame) {
   if (frame[3] == HEATER_FRAME_LENGTH && frame.size() >= 57) {
     // Long frame from heater
     ESP_LOGV(TAG, "Processing heater status frame");
@@ -342,7 +342,7 @@ void VevorHeater::process_heater_frame(const std::vector<uint8_t> &frame) {
   }
 }
 
-void VevorHeater::update_sensors(const std::vector<uint8_t> &frame) {
+void SunsterHeater::update_sensors(const std::vector<uint8_t> &frame) {
   // State sensor
   if (state_sensor_) {
     state_sensor_->publish_state(state_to_string(current_state_));
@@ -413,7 +413,7 @@ void VevorHeater::update_sensors(const std::vector<uint8_t> &frame) {
   }
 }
 
-void VevorHeater::update_fuel_consumption(float pump_frequency) {
+void SunsterHeater::update_fuel_consumption(float pump_frequency) {
   uint32_t current_time = millis();
   uint32_t time_delta = current_time - last_consumption_update_;
   
@@ -465,7 +465,7 @@ void VevorHeater::update_fuel_consumption(float pump_frequency) {
   last_consumption_update_ = current_time;
 }
 
-void VevorHeater::check_daily_reset() {
+void SunsterHeater::check_daily_reset() {
   uint32_t today = get_days_since_epoch();
   if (today != current_day_) {
     ESP_LOGI(TAG, "New day detected, resetting daily consumption counter");
@@ -479,7 +479,7 @@ void VevorHeater::check_daily_reset() {
   }
 }
 
-uint32_t VevorHeater::get_days_since_epoch() {
+uint32_t SunsterHeater::get_days_since_epoch() {
 #ifdef USE_TIME
   // Try to use ESPHome time component if available
   if (time_component_ != nullptr) {
@@ -524,7 +524,7 @@ uint32_t VevorHeater::get_days_since_epoch() {
   return now / (24 * 60 * 60);
 }
 
-void VevorHeater::save_fuel_consumption_data() {
+void SunsterHeater::save_fuel_consumption_data() {
   FuelConsumptionData data;
   data.daily_consumption_ml = daily_consumption_ml_;
   data.last_reset_day = current_day_;
@@ -538,7 +538,7 @@ void VevorHeater::save_fuel_consumption_data() {
   }
 }
 
-void VevorHeater::load_fuel_consumption_data() {
+void SunsterHeater::load_fuel_consumption_data() {
   FuelConsumptionData data;
   if (pref_fuel_consumption_.load(&data)) {
     // Check if it's the same day
@@ -569,7 +569,7 @@ void VevorHeater::load_fuel_consumption_data() {
   }
 }
 
-void VevorHeater::reset_daily_consumption() {
+void SunsterHeater::reset_daily_consumption() {
   ESP_LOGI(TAG, "Manual reset of daily consumption counter");
   daily_consumption_ml_ = 0.0f;
   save_fuel_consumption_data();
@@ -579,7 +579,7 @@ void VevorHeater::reset_daily_consumption() {
   }
 }
 
-void VevorHeater::reset_total_consumption() {
+void SunsterHeater::reset_total_consumption() {
   ESP_LOGI(TAG, "Manual reset of total consumption counter");
   total_fuel_pulses_ = 0.0f;
   total_consumption_ml_ = 0.0f;
@@ -590,7 +590,7 @@ void VevorHeater::reset_total_consumption() {
   }
 }
 
-void VevorHeater::check_voltage_safety() {
+void SunsterHeater::check_voltage_safety() {
   bool voltage_error = false;
   
   // Check voltage thresholds based on state
@@ -628,7 +628,7 @@ void VevorHeater::check_voltage_safety() {
   }
 }
 
-void VevorHeater::handle_antifreeze_mode() {
+void SunsterHeater::handle_antifreeze_mode() {
   // Antifreeze mode requires external temperature sensor
   if (!has_external_sensor()) {
     ESP_LOGW(TAG, "Antifreeze mode requires external temperature sensor");
@@ -730,7 +730,7 @@ void VevorHeater::handle_antifreeze_mode() {
   }
 }
 
-void VevorHeater::handle_communication_timeout() {
+void SunsterHeater::handle_communication_timeout() {
   static uint32_t last_timeout_log = 0;
   uint32_t now = millis();
   
@@ -745,7 +745,7 @@ void VevorHeater::handle_communication_timeout() {
   }
 }
 
-const char* VevorHeater::state_to_string(HeaterState state) {
+const char* SunsterHeater::state_to_string(HeaterState state) {
   switch (state) {
     case HeaterState::OFF: return "Off";
     case HeaterState::POLLING_STATE: return "Polling/Preheat";
@@ -756,19 +756,19 @@ const char* VevorHeater::state_to_string(HeaterState state) {
   }
 }
 
-uint16_t VevorHeater::read_uint16_be(const std::vector<uint8_t> &data, size_t offset) {
+uint16_t SunsterHeater::read_uint16_be(const std::vector<uint8_t> &data, size_t offset) {
   if (offset + 1 >= data.size()) {
     return 0;
   }
   return (static_cast<uint16_t>(data[offset]) << 8) | data[offset + 1];
 }
 
-float VevorHeater::parse_temperature(const std::vector<uint8_t> &data, size_t offset) {
+float SunsterHeater::parse_temperature(const std::vector<uint8_t> &data, size_t offset) {
   uint16_t raw = read_uint16_be(data, offset);
   return raw / 100.0f;
 }
 
-float VevorHeater::parse_voltage(const std::vector<uint8_t> &data, size_t offset) {
+float SunsterHeater::parse_voltage(const std::vector<uint8_t> &data, size_t offset) {
   if (offset >= data.size()) {
     return 0.0f;
   }
@@ -776,7 +776,7 @@ float VevorHeater::parse_voltage(const std::vector<uint8_t> &data, size_t offset
 }
 
 // Public control methods
-void VevorHeater::set_control_mode(ControlMode mode) {
+void SunsterHeater::set_control_mode(ControlMode mode) {
   ControlMode old_mode = control_mode_;
   control_mode_ = mode;
   
@@ -790,7 +790,7 @@ void VevorHeater::set_control_mode(ControlMode mode) {
   ESP_LOGI(TAG, "Control mode changed from %d to %d", (int)old_mode, (int)mode);
 }
 
-void VevorHeater::turn_on() {
+void SunsterHeater::turn_on() {
   // Check if automatic mode requires external sensor
   if (control_mode_ == ControlMode::AUTOMATIC) {
     if (!has_external_sensor()) {
@@ -816,12 +816,12 @@ void VevorHeater::turn_on() {
   ESP_LOGI(TAG, "Heater turned ON at %.0f%% power", default_power_percent_);
 }
 
-void VevorHeater::turn_off() {
+void SunsterHeater::turn_off() {
   heater_enabled_ = false;
   ESP_LOGI(TAG, "Heater turned OFF");
 }
 
-void VevorHeater::set_power_level_percent(float percent) {
+void SunsterHeater::set_power_level_percent(float percent) {
   uint8_t level = static_cast<uint8_t>(std::max(1.0f, std::min(10.0f, percent / 10.0f)));
   if (level != power_level_) {
     power_level_ = level;
@@ -829,8 +829,8 @@ void VevorHeater::set_power_level_percent(float percent) {
   }
 }
 
-void VevorHeater::dump_config() {
-  ESP_LOGCONFIG(TAG, "Vevor Heater:");
+void SunsterHeater::dump_config() {
+  ESP_LOGCONFIG(TAG, "Sunster Heater:");
   ESP_LOGCONFIG(TAG, "  Passive Sniff: %s", passive_sniff_mode_ ? "yes (RX/decode log only, no TX)" : "no");
   ESP_LOGCONFIG(TAG, "  Control Mode: %s", control_mode_ == ControlMode::AUTOMATIC ? "Automatic" : "Manual");
   ESP_LOGCONFIG(TAG, "  Default Power Level: %.0f%%", default_power_percent_);
@@ -870,5 +870,5 @@ void VevorHeater::dump_config() {
   LOG_BINARY_SENSOR("  ", "Low Voltage Error", low_voltage_error_sensor_);
 }
 
-}  // namespace vevor_heater
+}  // namespace sunster_heater
 }  // namespace esphome

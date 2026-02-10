@@ -19,9 +19,9 @@ namespace esphome {
 // Forward declaration for optional time component
 namespace time { class RealTimeClock; }
 
-namespace vevor_heater {
+namespace sunster_heater {
 
-static const char *const TAG = "vevor_heater";
+static const char *const TAG = "sunster_heater";
 
 // Fuel consumption constants
 static const float INJECTED_PER_PULSE = 0.022f; // ml per fuel pump pulse
@@ -67,12 +67,12 @@ struct FuelConsumptionData {
   float total_pulses;  // Keep as float to avoid precision loss
 };
 
-class VevorHeater : public PollingComponent, public uart::UARTDevice {
+class SunsterHeater : public PollingComponent, public uart::UARTDevice {
  public:
   // Configuration methods
   void set_target_temperature(float temperature) { target_temperature_ = temperature; }
-  void set_power_level(uint8_t level) { 
-    power_level_ = std::max(1, std::min(10, (int)level)); 
+  void set_power_level(uint8_t level) {
+    power_level_ = std::max(1, std::min(10, (int)level));
   }
   void set_control_mode(ControlMode mode);
   void set_default_power_percent(float percent) { default_power_percent_ = percent; }
@@ -87,17 +87,17 @@ class VevorHeater : public PollingComponent, public uart::UARTDevice {
   void set_antifreeze_temp_medium(float temp) { antifreeze_temp_medium_ = temp; }
   void set_antifreeze_temp_low(float temp) { antifreeze_temp_low_ = temp; }
   void set_antifreeze_temp_off(float temp) { antifreeze_temp_off_ = temp; }
-  
+
   // Time component setter
   void set_time_component(time::RealTimeClock *time) { time_component_ = time; }
-  
+
   // Number component setter
   void set_injected_per_pulse_number(number::Number *num) { injected_per_pulse_number_ = num; }
-  
+
   // External temperature sensor
   void set_external_temperature_sensor(sensor::Sensor *sensor) { external_temperature_sensor_ = sensor; }
-  
-  // Sensor setters - removed duplicate set_temperature_sensor
+
+  // Sensor setters
   void set_input_voltage_sensor(sensor::Sensor *sensor) { input_voltage_sensor_ = sensor; }
   void set_state_sensor(text_sensor::TextSensor *sensor) { state_sensor_ = sensor; }
   void set_power_level_sensor(sensor::Sensor *sensor) { power_level_sensor_ = sensor; }
@@ -111,39 +111,39 @@ class VevorHeater : public PollingComponent, public uart::UARTDevice {
   void set_daily_consumption_sensor(sensor::Sensor *sensor) { daily_consumption_sensor_ = sensor; }
   void set_total_consumption_sensor(sensor::Sensor *sensor) { total_consumption_sensor_ = sensor; }
   void set_low_voltage_error_sensor(binary_sensor::BinarySensor *sensor) { low_voltage_error_sensor_ = sensor; }
-  
+
   // Control methods
   void turn_on();
   void turn_off();
   void set_power_level_percent(float percent);
   void reset_daily_consumption();
   void reset_total_consumption();
-  
+
   // Control mode management
   bool is_automatic_mode() const { return control_mode_ == ControlMode::AUTOMATIC; }
   bool is_manual_mode() const { return control_mode_ == ControlMode::MANUAL; }
   bool is_antifreeze_mode() const { return control_mode_ == ControlMode::ANTIFREEZE; }
   float get_external_temperature() const { return external_temperature_; }
-  bool has_external_sensor() const { 
-    return external_temperature_sensor_ != nullptr && 
-           !std::isnan(external_temperature_); 
+  bool has_external_sensor() const {
+    return external_temperature_sensor_ != nullptr &&
+           !std::isnan(external_temperature_);
   }
-  
+
   // Status getters
   HeaterState get_heater_state() const { return current_state_; }
   float get_current_temperature() const { return current_temperature_; }
-  bool is_heating() const { 
-    return current_state_ == HeaterState::POLLING_STATE || 
-           current_state_ == HeaterState::HEATING_UP || 
-           current_state_ == HeaterState::STABLE_COMBUSTION; 
+  bool is_heating() const {
+    return current_state_ == HeaterState::POLLING_STATE ||
+           current_state_ == HeaterState::HEATING_UP ||
+           current_state_ == HeaterState::STABLE_COMBUSTION;
   }
   bool is_connected() const { return last_received_time_ + COMMUNICATION_TIMEOUT_MS > millis(); }
   bool has_low_voltage_error() const { return low_voltage_error_; }
-  
+
   // Fuel consumption getters
   float get_daily_consumption() const { return daily_consumption_ml_; }
   float get_instantaneous_consumption_rate() const { return pump_frequency_ * injected_per_pulse_ * 3600.0f; }
-  
+
   // Component lifecycle
   void setup() override;
   void update() override;
@@ -158,26 +158,26 @@ class VevorHeater : public PollingComponent, public uart::UARTDevice {
   bool validate_frame(const std::vector<uint8_t> &frame, uint8_t expected_length);
   void log_frame_raw(const char* direction, const std::vector<uint8_t> &frame);
   void log_decode_attempt(const std::vector<uint8_t> &frame, uint8_t expected_length);
-  
+
   // Data parsing helpers
   uint16_t read_uint16_be(const std::vector<uint8_t> &data, size_t offset);
   float parse_temperature(const std::vector<uint8_t> &data, size_t offset);
   float parse_voltage(const std::vector<uint8_t> &data, size_t offset);
   const char* state_to_string(HeaterState state);
-  
+
   // State management
   void update_sensors(const std::vector<uint8_t> &frame);
   void handle_communication_timeout();
   void check_voltage_safety();
   void handle_antifreeze_mode();
-  
+
   // Fuel consumption tracking
   void update_fuel_consumption(float pump_frequency);
   void save_fuel_consumption_data();
   void load_fuel_consumption_data();
   void check_daily_reset();
   uint32_t get_days_since_epoch();
-  
+
   // Communication state
   std::vector<uint8_t> rx_buffer_;
   uint32_t last_received_time_{0};
@@ -185,7 +185,7 @@ class VevorHeater : public PollingComponent, public uart::UARTDevice {
   bool frame_sync_{false};
   uint32_t polling_interval_ms_{DEFAULT_POLLING_INTERVAL_MS};
   bool passive_sniff_mode_{false};  // Only log RX/decode, never send
-  
+
   // Control state
   bool heater_enabled_{false};
   uint8_t power_level_{8};  // 1-10 scale, default 80%
@@ -194,16 +194,16 @@ class VevorHeater : public PollingComponent, public uart::UARTDevice {
   ControlMode control_mode_{ControlMode::MANUAL};
   float default_power_percent_{80.0};
   float injected_per_pulse_{INJECTED_PER_PULSE};
-  float min_voltage_start_{12.3f};      // Minimum voltage to allow starting
-  float min_voltage_operate_{11.4f};    // Minimum voltage to keep running
-  float antifreeze_temp_on_{2.0f};      // Temperature to turn on at 80% power
-  float antifreeze_temp_medium_{6.0f};  // Temperature to set 50% power
-  float antifreeze_temp_low_{8.0f};     // Temperature to set 20% power
-  float antifreeze_temp_off_{9.0f};     // Temperature to turn off
-  static constexpr float ANTIFREEZE_HYSTERESIS = 0.4f;  // Hysteresis in °C to prevent rapid cycling
-  float last_antifreeze_power_{0.0f};   // Track last power level for hysteresis logic
-  bool antifreeze_active_{false};       // Track if antifreeze is actively heating
-  
+  float min_voltage_start_{12.3f};
+  float min_voltage_operate_{11.4f};
+  float antifreeze_temp_on_{2.0f};
+  float antifreeze_temp_medium_{6.0f};
+  float antifreeze_temp_low_{8.0f};
+  float antifreeze_temp_off_{9.0f};
+  static constexpr float ANTIFREEZE_HYSTERESIS = 0.4f;
+  float last_antifreeze_power_{0.0f};
+  bool antifreeze_active_{false};
+
   // Parsed sensor values
   float current_temperature_{0.0};
   float external_temperature_{NAN};
@@ -215,21 +215,19 @@ class VevorHeater : public PollingComponent, public uart::UARTDevice {
   uint16_t state_duration_{0};
   bool cooling_down_{false};
   bool low_voltage_error_{false};
-  
+
   // Fuel consumption tracking
   float last_pump_frequency_{0.0};
   uint32_t last_consumption_update_{0};
   float daily_consumption_ml_{0.0};
   uint32_t current_day_{0};
-  float total_fuel_pulses_{0.0};  // Keep as float to avoid precision loss
-  float total_consumption_ml_{0.0};  // Lifetime total consumption
+  float total_fuel_pulses_{0.0};
+  float total_consumption_ml_{0.0};
   ESPPreferenceObject pref_fuel_consumption_;
-  
-  // Time component pointer
+
   time::RealTimeClock *time_component_{nullptr};
   bool time_sync_warning_shown_{false};
-  
-  // Sensor pointers - removed duplicate temperature_sensor_
+
   sensor::Sensor *external_temperature_sensor_{nullptr};
   sensor::Sensor *input_voltage_sensor_{nullptr};
   text_sensor::TextSensor *state_sensor_{nullptr};
@@ -248,17 +246,17 @@ class VevorHeater : public PollingComponent, public uart::UARTDevice {
 };
 
 // Number component for injected per pulse configuration
-class VevorInjectedPerPulseNumber : public number::Number, public Component {
+class SunsterInjectedPerPulseNumber : public number::Number, public Component {
  public:
-  void set_vevor_heater(VevorHeater *heater) { heater_ = heater; }
-  
+  void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
+
   void setup() override {
     if (heater_) {
       float value = heater_->get_injected_per_pulse();
       this->publish_state(value);
     }
   }
-  
+
  protected:
   void control(float value) override {
     if (heater_) {
@@ -266,41 +264,38 @@ class VevorInjectedPerPulseNumber : public number::Number, public Component {
       this->publish_state(value);
     }
   }
-  
-  VevorHeater *heater_{nullptr};
+
+  SunsterHeater *heater_{nullptr};
 };
 
 // Button component for resetting total consumption
-class VevorResetTotalConsumptionButton : public button::Button, public Component {
+class SunsterResetTotalConsumptionButton : public button::Button, public Component {
  public:
-  void set_vevor_heater(VevorHeater *heater) { heater_ = heater; }
-  
+  void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
+
  protected:
   void press_action() override {
     if (heater_) {
       heater_->reset_total_consumption();
     }
   }
-  
-  VevorHeater *heater_{nullptr};
+
+  SunsterHeater *heater_{nullptr};
 };
 
 // Switch component for heater power control (Manual mode only)
-class VevorHeaterPowerSwitch : public switch_::Switch, public Component {
+class SunsterHeaterPowerSwitch : public switch_::Switch, public Component {
  public:
-  void set_vevor_heater(VevorHeater *heater) { heater_ = heater; }
-  
+  void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
+
  protected:
   void write_state(bool state) override {
     if (heater_) {
-      // Only allow control in manual mode
       if (!heater_->is_manual_mode()) {
-        ESP_LOGW("vevor_heater", "Power switch only works in Manual mode");
-        // Restore previous state
+        ESP_LOGW("sunster_heater", "Power switch only works in Manual mode");
         this->publish_state(!state);
         return;
       }
-      
       if (state) {
         heater_->turn_on();
       } else {
@@ -309,55 +304,51 @@ class VevorHeaterPowerSwitch : public switch_::Switch, public Component {
       this->publish_state(state);
     }
   }
-  
-  VevorHeater *heater_{nullptr};
+
+  SunsterHeater *heater_{nullptr};
 };
 
 // Number component for power level control (Manual mode only)
-class VevorHeaterPowerLevelNumber : public number::Number, public Component {
+class SunsterHeaterPowerLevelNumber : public number::Number, public Component {
  public:
-  void set_vevor_heater(VevorHeater *heater) { heater_ = heater; }
-  
+  void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
+
   void setup() override {
     if (heater_) {
-      this->publish_state(80.0f);  // Default power level
+      this->publish_state(80.0f);
     }
   }
-  
+
  protected:
   void control(float value) override {
     if (heater_) {
-      // Only allow control in manual mode
       if (!heater_->is_manual_mode()) {
-        ESP_LOGW("vevor_heater", "Power level only works in Manual mode");
+        ESP_LOGW("sunster_heater", "Power level only works in Manual mode");
         return;
       }
-      
       heater_->set_power_level_percent(value);
       this->publish_state(value);
     }
   }
-  
-  VevorHeater *heater_{nullptr};
+
+  SunsterHeater *heater_{nullptr};
 };
 
 // Select component for control mode
-class VevorControlModeSelect : public select::Select, public Component {
+class SunsterControlModeSelect : public select::Select, public Component {
  public:
-  void set_vevor_heater(VevorHeater *heater) { heater_ = heater; }
-  
+  void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
+
   void setup() override {
-    // Set initial value based on heater's mode
     if (heater_) {
       if (heater_->is_manual_mode()) {
         this->publish_state("Manual");
       } else if (heater_->is_antifreeze_mode()) {
         this->publish_state("Antifreeze");
       }
-      // Automatic mode commented out for now
     }
   }
-  
+
  protected:
   void control(const std::string &value) override {
     if (heater_) {
@@ -366,15 +357,12 @@ class VevorControlModeSelect : public select::Select, public Component {
       } else if (value == "Antifreeze") {
         heater_->set_control_mode(ControlMode::ANTIFREEZE);
       }
-      // else if (value == "Automatic") {
-      //   heater_->set_control_mode(ControlMode::AUTOMATIC);
-      // }
       this->publish_state(value);
     }
   }
-  
-  VevorHeater *heater_{nullptr};
+
+  SunsterHeater *heater_{nullptr};
 };
 
-}  // namespace vevor_heater
+}  // namespace sunster_heater
 }  // namespace esphome
