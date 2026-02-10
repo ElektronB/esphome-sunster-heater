@@ -145,9 +145,11 @@ void SunsterHeater::check_uart_data() {
         uint8_t expected_length = (rx_buffer_[3] == HEATER_FRAME_LENGTH) ? 57 : 16;
         
         if (rx_buffer_.size() >= expected_length) {
-          // Frame complete: always log raw RX and decode attempt (for protocol analysis)
-          log_frame_raw("RX", rx_buffer_);
-          log_decode_attempt(rx_buffer_, expected_length);
+          // Frame complete: log raw RX and decode only in passive sniff mode (avoids blocking)
+          if (passive_sniff_mode_) {
+            log_frame_raw("RX", rx_buffer_);
+            log_decode_attempt(rx_buffer_, expected_length);
+          }
           
           // First check if this is a controller frame echo (should be silently ignored)
           if (rx_buffer_[1] == CONTROLLER_ID) {
@@ -237,12 +239,13 @@ void SunsterHeater::log_decode_attempt(const std::vector<uint8_t> &frame, uint8_
     uint16_t voltage_raw = read_uint16_be(frame, 10);
     uint8_t glow_raw = frame[13];
     uint8_t cooling = frame[14];
+    uint8_t byte15 = frame.size() > 15 ? frame[15] : 0;
     int16_t temp_raw = static_cast<int16_t>(read_uint16_be(frame, 16));
     uint16_t duration_raw = read_uint16_be(frame, 20);
     uint8_t pump_raw = frame[23];
     uint16_t fan_raw = read_uint16_be(frame, 28);
-    ESP_LOGI(TAG, "[decode] long frame: state=0x%02X power=%u voltage_raw=%u(%.1fV) glow=%u cooling=%u temp_raw=%d(%.1fC) duration=%u pump=%.1fHz fan=%u",
-             state_raw, power_raw, voltage_raw, voltage_raw / 10.0f, glow_raw, cooling,
+    ESP_LOGI(TAG, "[decode] long frame: state=0x%02X power=%u voltage_raw=%u(%.1fV) glow=%.2fA cooling=%u byte15=0x%02X temp_raw=%d(%.1fC) duration=%u pump=%.1fHz fan=%u",
+             state_raw, power_raw, voltage_raw, voltage_raw / 10.0f, glow_raw / 100.0f, cooling, byte15,
              (int)temp_raw, temp_raw / 10.0f, duration_raw, pump_raw / 10.0f, fan_raw);
   } else if (frame[3] == CONTROLLER_FRAME_LENGTH && frame.size() >= 16) {
     ESP_LOGI(TAG, "[decode] short frame (controller): cmd=0x%02X power=0x%02X state_byte=0x%02X",
@@ -318,6 +321,10 @@ void SunsterHeater::send_controller_frame() {
            YESNO(heater_enabled_), power_level_, frame[9]);
 }
 
+// 57-byte heater frame (from log analysis): 0=AA 1=77 2=cmd 3=0x34, 5=state, 6=power(1-10),
+// 10-11=voltage, 13=constant 0xB8, 14=cooling, 15=varies at start (13→2→8→0; candidate glow or sub-state),
+// 10-11=voltage BE/10, 13=0xB8 const (not glow current), 14=cooling, 16-17=temp BE/10,
+// 20-21=duration BE, 23=pump/10 Hz, 28-29=fan BE. 48-51 observed 24 09 20 10 (room/target?).
 void SunsterHeater::process_heater_frame(const std::vector<uint8_t> &frame) {
   if (frame[3] == HEATER_FRAME_LENGTH && frame.size() >= 57) {
     // Long frame from heater
@@ -330,6 +337,13 @@ void SunsterHeater::process_heater_frame(const std::vector<uint8_t> &frame) {
     if (new_state != current_state_) {
       current_state_ = new_state;
       ESP_LOGD(TAG, "Heater state changed to: %s", state_to_string(current_state_));
+    }
+    
+    // Sync our "enabled" flag with actual heater state so control frame shows enabled=yes when heater runs
+    bool actually_running = (current_state_ != HeaterState::OFF && current_state_ != HeaterState::STOPPING_COOLING);
+    if (heater_enabled_ != actually_running) {
+      heater_enabled_ = actually_running;
+      ESP_LOGD(TAG, "Synced enabled to %s (heater state %s)", YESNO(heater_enabled_), state_to_string(current_state_));
     }
     
     // Update all sensors
@@ -363,11 +377,11 @@ void SunsterHeater::update_sensors(const std::vector<uint8_t> &frame) {
     }
   }
   
-  // Glow plug current (byte 13)
-  uint8_t glow_current_raw = frame[13];
+  // Glow plug current: Byte 13 is constant 0xB8 in observed Sunster frames (not current).
+  // Not decoded; sensor shows 0 until protocol mapping is confirmed.
   if (glow_plug_current_sensor_) {
-    glow_plug_current_ = glow_current_raw;
-    glow_plug_current_sensor_->publish_state(glow_plug_current_);
+    glow_plug_current_ = 0.0f;
+    glow_plug_current_sensor_->publish_state(0.0f);  // unknown in this protocol
   }
   
   // Cooling down flag (byte 14)
