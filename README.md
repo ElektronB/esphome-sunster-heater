@@ -9,6 +9,9 @@ An easy-to-use ESPHome library for controlling Sunster (and protocol-compatible)
 > [!WARNING]
 > **This library is under active development!** Major changes are expected, and future versions may introduce breaking changes. Current configurations may not be compatible with upcoming releases. Please pin to a specific version if you need stability.
 
+> [!NOTE]
+> **Status: highly beta.** This is the author’s first test setup used to operate the heater (without OEM controller). It has **not** been long-term tested yet, but so far it appears to work well. Use at your own risk and report issues if you find any.
+
 ---
 
 ## Features
