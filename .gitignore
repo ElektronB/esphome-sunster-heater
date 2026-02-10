@@ -1,6 +1,7 @@
 # ESPHome secrets and sensitive files
 secrets.yaml
 esphome.yaml
+log.txt 
 
 # ESPHome build and cache files
 .esphome/
