@@ -164,6 +164,21 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_POLLING_INTERVAL, default="60s"): cv.positive_time_period_milliseconds,
             cv.Optional(CONF_TIME_ID): cv.use_id(time.RealTimeClock),
             cv.Optional(CONF_EXTERNAL_TEMPERATURE_SENSOR): cv.use_id(sensor.Sensor),
+            cv.Optional("target_temperature", default=20.0): cv.float_range(
+                min=5.0, max=35.0
+            ),
+            cv.Optional("pi_kp", default=10.0): cv.float_range(
+                min=0.1, max=50.0
+            ),
+            cv.Optional("pi_ki", default=0.5): cv.float_range(
+                min=0.0, max=5.0
+            ),
+            cv.Optional("pi_output_min_off", default=3.0): cv.float_range(
+                min=0.0, max=20.0
+            ),
+            cv.Optional("pi_output_min_on", default=15.0): cv.float_range(
+                min=5.0, max=50.0
+            ),
             cv.Optional("min_voltage_start", default=12.3): cv.float_range(
                 min=10.0, max=15.0
             ),
@@ -274,6 +289,13 @@ async def to_code(config):
     cg.add(var.set_antifreeze_temp_medium(config["antifreeze_temp_medium"]))
     cg.add(var.set_antifreeze_temp_low(config["antifreeze_temp_low"]))
     cg.add(var.set_antifreeze_temp_off(config["antifreeze_temp_off"]))
+
+    # Target temperature and PI controller (automatic mode)
+    cg.add(var.set_target_temperature(config["target_temperature"]))
+    cg.add(var.set_pi_kp(config["pi_kp"]))
+    cg.add(var.set_pi_ki(config["pi_ki"]))
+    cg.add(var.set_pi_output_min_off(config["pi_output_min_off"]))
+    cg.add(var.set_pi_output_min_on(config["pi_output_min_on"]))
 
     # Set time component if provided
     if CONF_TIME_ID in config:

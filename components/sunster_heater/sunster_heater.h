@@ -87,6 +87,10 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   void set_antifreeze_temp_medium(float temp) { antifreeze_temp_medium_ = temp; }
   void set_antifreeze_temp_low(float temp) { antifreeze_temp_low_ = temp; }
   void set_antifreeze_temp_off(float temp) { antifreeze_temp_off_ = temp; }
+  void set_pi_kp(float kp) { pi_kp_ = kp; }
+  void set_pi_ki(float ki) { pi_ki_ = ki; }
+  void set_pi_output_min_off(float v) { pi_output_min_off_ = v; }
+  void set_pi_output_min_on(float v) { pi_output_min_on_ = v; }
 
   // Time component setter
   void set_time_component(time::RealTimeClock *time) { time_component_ = time; }
@@ -172,6 +176,7 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   void handle_communication_timeout();
   void check_voltage_safety();
   void handle_antifreeze_mode();
+  void handle_automatic_mode();
 
   // Fuel consumption tracking
   void update_fuel_consumption(float pump_frequency);
@@ -206,6 +211,15 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   static constexpr float ANTIFREEZE_HYSTERESIS = 0.4f;
   float last_antifreeze_power_{0.0f};
   bool antifreeze_active_{false};
+
+  // PI controller (automatic mode)
+  float pi_kp_{10.0f};
+  float pi_ki_{0.5f};
+  float pi_output_min_off_{3.0f};
+  float pi_output_min_on_{15.0f};
+  float pi_integral_{0.0f};
+  uint32_t last_pi_time_{0};
+  static constexpr float PI_INTEGRAL_MAX = 100.0f;
 
   // Parsed sensor values
   float current_temperature_{0.0};

@@ -84,6 +84,10 @@ void SunsterHeater::update() {
   // Check voltage safety
   check_voltage_safety();
   
+  // Handle automatic mode (PI controller)
+  if (control_mode_ == ControlMode::AUTOMATIC) {
+    handle_automatic_mode();
+  }
   // Handle antifreeze mode logic
   if (control_mode_ == ControlMode::ANTIFREEZE) {
     handle_antifreeze_mode();
@@ -754,6 +758,43 @@ void SunsterHeater::handle_antifreeze_mode() {
   }
 }
 
+void SunsterHeater::handle_automatic_mode() {
+  if (!has_external_sensor()) {
+    if (heater_enabled_) {
+      turn_off();
+    }
+    return;
+  }
+  uint32_t now = millis();
+  float dt_s = (last_pi_time_ != 0) ? (now - last_pi_time_) / 1000.0f : 5.0f;
+  if (dt_s <= 0.0f) {
+    dt_s = 5.0f;
+  }
+  last_pi_time_ = now;
+
+  float error = target_temperature_ - external_temperature_;
+  pi_integral_ += pi_ki_ * error * dt_s;
+  pi_integral_ = std::max(-PI_INTEGRAL_MAX, std::min(PI_INTEGRAL_MAX, pi_integral_));
+
+  float output = pi_kp_ * error + pi_integral_;
+  output = std::max(0.0f, std::min(100.0f, output));
+
+  if (output < pi_output_min_off_) {
+    if (heater_enabled_) {
+      turn_off();
+    }
+  } else if (output >= pi_output_min_on_) {
+    if (!heater_enabled_) {
+      turn_on();
+    }
+    set_power_level_percent(output);
+  } else {
+    if (heater_enabled_) {
+      set_power_level_percent(pi_output_min_on_);
+    }
+  }
+}
+
 void SunsterHeater::handle_communication_timeout() {
   static uint32_t last_timeout_log = 0;
   uint32_t now = millis();
@@ -813,6 +854,11 @@ void SunsterHeater::set_control_mode(ControlMode mode) {
     turn_off();
     antifreeze_active_ = false;
   }
+  // When entering automatic mode, reset PI integral for fresh start
+  if (mode == ControlMode::AUTOMATIC) {
+    pi_integral_ = 0.0f;
+    last_pi_time_ = 0;
+  }
   
   ESP_LOGI(TAG, "Control mode changed from %d to %d", (int)old_mode, (int)mode);
 }
@@ -859,7 +905,13 @@ void SunsterHeater::set_power_level_percent(float percent) {
 void SunsterHeater::dump_config() {
   ESP_LOGCONFIG(TAG, "Sunster Heater:");
   ESP_LOGCONFIG(TAG, "  Passive Sniff: %s", passive_sniff_mode_ ? "yes (RX/decode log only, no TX)" : "no");
-  ESP_LOGCONFIG(TAG, "  Control Mode: %s", control_mode_ == ControlMode::AUTOMATIC ? "Automatic" : "Manual");
+  ESP_LOGCONFIG(TAG, "  Control Mode: %s",
+                control_mode_ == ControlMode::AUTOMATIC ? "Automatic (PI)" :
+                control_mode_ == ControlMode::ANTIFREEZE ? "Antifreeze" : "Manual");
+  if (control_mode_ == ControlMode::AUTOMATIC) {
+    ESP_LOGCONFIG(TAG, "  PI: Kp=%.2f Ki=%.2f, output off<%.0f%% on>=%.0f%%",
+                  pi_kp_, pi_ki_, pi_output_min_off_, pi_output_min_on_);
+  }
   ESP_LOGCONFIG(TAG, "  Default Power Level: %.0f%%", default_power_percent_);
   ESP_LOGCONFIG(TAG, "  Power Level: %d/10", power_level_);
   ESP_LOGCONFIG(TAG, "  Target Temperature: %.1f°C", target_temperature_);
