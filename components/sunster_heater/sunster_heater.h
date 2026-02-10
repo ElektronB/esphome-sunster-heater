@@ -139,6 +139,8 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   }
   bool is_connected() const { return last_received_time_ + COMMUNICATION_TIMEOUT_MS > millis(); }
   bool has_low_voltage_error() const { return low_voltage_error_; }
+  bool get_heater_enabled() const { return heater_enabled_; }
+  bool is_state_synced_once() const { return heater_state_synced_once_; }
 
   // Fuel consumption getters
   float get_daily_consumption() const { return daily_consumption_ml_; }
@@ -185,6 +187,7 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   bool frame_sync_{false};
   uint32_t polling_interval_ms_{DEFAULT_POLLING_INTERVAL_MS};
   bool passive_sniff_mode_{false};  // Only log RX/decode, never send
+  bool heater_state_synced_once_{false};  // After first heater frame, sync heater_enabled_ from state so switch can init
 
   // Control state
   bool heater_enabled_{false};
@@ -288,6 +291,12 @@ class SunsterHeaterPowerSwitch : public switch_::Switch, public Component {
   void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
 
  protected:
+  void update() override {
+    if (heater_ && heater_->is_manual_mode() && heater_->is_state_synced_once() && !initial_state_published_) {
+      this->publish_state(heater_->get_heater_enabled());
+      initial_state_published_ = true;
+    }
+  }
   void write_state(bool state) override {
     if (heater_) {
       if (!heater_->is_manual_mode()) {
@@ -305,6 +314,7 @@ class SunsterHeaterPowerSwitch : public switch_::Switch, public Component {
   }
 
   SunsterHeater *heater_{nullptr};
+  bool initial_state_published_{false};
 };
 
 // Number component for power level control (Manual mode only)

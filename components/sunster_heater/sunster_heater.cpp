@@ -338,8 +338,14 @@ void SunsterHeater::process_heater_frame(const std::vector<uint8_t> &frame) {
       ESP_LOGD(TAG, "Heater state changed to: %s", state_to_string(current_state_));
     }
     
-    // Only sync enabled -> false when heater has actually stopped (so UI "off" is not overwritten while heater is still running)
-    if ((current_state_ == HeaterState::OFF || current_state_ == HeaterState::STOPPING_COOLING) && heater_enabled_) {
+    // On first frame after boot: sync heater_enabled_ from heater state so power switch can show correct ON/OFF
+    if (!heater_state_synced_once_) {
+      heater_state_synced_once_ = true;
+      heater_enabled_ = (current_state_ != HeaterState::OFF && current_state_ != HeaterState::STOPPING_COOLING);
+      ESP_LOGD(TAG, "Initial sync: enabled=%s (heater state %s)", YESNO(heater_enabled_), state_to_string(current_state_));
+    }
+    // After that, only sync enabled -> false when heater has actually stopped (so UI "off" is not overwritten)
+    else if ((current_state_ == HeaterState::OFF || current_state_ == HeaterState::STOPPING_COOLING) && heater_enabled_) {
       heater_enabled_ = false;
       ESP_LOGD(TAG, "Synced enabled to NO (heater state %s)", state_to_string(current_state_));
     }
