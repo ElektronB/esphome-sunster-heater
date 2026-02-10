@@ -65,6 +65,7 @@ uart:
 vevor_heater:
   id: my_heater
   uart_id: heater_serial
+  # passive_sniff: true          # Optional: only log RX frames + decode attempts, never send (for protocol analysis with OEM on bus)
   control_mode: manual           # Manual mode - heater runs at set power level
   default_power_percent: 80      # Default 80% power when turned on
   injected_per_pulse: 0.022      # Initial value (in ml)

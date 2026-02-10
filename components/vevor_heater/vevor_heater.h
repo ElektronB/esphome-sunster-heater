@@ -79,6 +79,8 @@ class VevorHeater : public PollingComponent, public uart::UARTDevice {
   void set_injected_per_pulse(float ml_per_pulse) { injected_per_pulse_ = ml_per_pulse; }
   float get_injected_per_pulse() const { return injected_per_pulse_; }
   void set_polling_interval(uint32_t interval_ms) { polling_interval_ms_ = interval_ms; }
+  void set_passive_sniff_mode(bool enable) { passive_sniff_mode_ = enable; }
+  bool is_passive_sniff_mode() const { return passive_sniff_mode_; }
   void set_min_voltage_start(float voltage) { min_voltage_start_ = voltage; }
   void set_min_voltage_operate(float voltage) { min_voltage_operate_ = voltage; }
   void set_antifreeze_temp_on(float temp) { antifreeze_temp_on_ = temp; }
@@ -154,6 +156,8 @@ class VevorHeater : public PollingComponent, public uart::UARTDevice {
   void process_heater_frame(const std::vector<uint8_t> &frame);
   void check_uart_data();
   bool validate_frame(const std::vector<uint8_t> &frame, uint8_t expected_length);
+  void log_frame_raw(const char* direction, const std::vector<uint8_t> &frame);
+  void log_decode_attempt(const std::vector<uint8_t> &frame, uint8_t expected_length);
   
   // Data parsing helpers
   uint16_t read_uint16_be(const std::vector<uint8_t> &data, size_t offset);
@@ -180,6 +184,7 @@ class VevorHeater : public PollingComponent, public uart::UARTDevice {
   uint32_t last_send_time_{0};
   bool frame_sync_{false};
   uint32_t polling_interval_ms_{DEFAULT_POLLING_INTERVAL_MS};
+  bool passive_sniff_mode_{false};  // Only log RX/decode, never send
   
   // Control state
   bool heater_enabled_{false};

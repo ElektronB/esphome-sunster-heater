@@ -7,6 +7,7 @@
 #endif
 #include <cinttypes>
 #include <ctime>
+#include <string>
 
 namespace esphome {
 namespace vevor_heater {
@@ -61,10 +62,14 @@ void VevorHeater::setup() {
   ESP_LOGCONFIG(TAG, "Injected per pulse: %.2f ml", injected_per_pulse_);
   ESP_LOGCONFIG(TAG, "Daily consumption: %.2f ml", daily_consumption_ml_);
   
-  // Send initial status request immediately after boot to get current heater state
-  send_controller_frame();
-  last_send_time_ = millis();
-  ESP_LOGD(TAG, "Initial status request sent");
+  // Send initial status request immediately after boot (unless passive sniff mode)
+  if (!passive_sniff_mode_) {
+    send_controller_frame();
+    last_send_time_ = millis();
+    ESP_LOGD(TAG, "Initial status request sent");
+  } else {
+    ESP_LOGI(TAG, "Passive sniff mode: only logging RX frames and decode attempts, not sending");
+  }
 }
 
 void VevorHeater::update() {
@@ -103,8 +108,8 @@ void VevorHeater::update() {
     }
   }
   
-  // Send controller frame at appropriate intervals
-  if (now - last_send_time_ >= send_interval) {
+  // Send controller frame at appropriate intervals (skip in passive sniff mode)
+  if (!passive_sniff_mode_ && (now - last_send_time_ >= send_interval)) {
     send_controller_frame();
     last_send_time_ = now;
   }
@@ -140,7 +145,10 @@ void VevorHeater::check_uart_data() {
         uint8_t expected_length = (rx_buffer_[3] == HEATER_FRAME_LENGTH) ? 57 : 16;
         
         if (rx_buffer_.size() >= expected_length) {
-          // Frame complete, process it
+          // Frame complete: always log raw RX and decode attempt (for protocol analysis)
+          log_frame_raw("RX", rx_buffer_);
+          log_decode_attempt(rx_buffer_, expected_length);
+          
           // First check if this is a controller frame echo (should be silently ignored)
           if (rx_buffer_[1] == CONTROLLER_ID) {
             ESP_LOGVV(TAG, "Ignoring controller frame echo");
@@ -203,6 +211,45 @@ bool VevorHeater::validate_frame(const std::vector<uint8_t> &frame, uint8_t expe
   return true;
 }
 
+void VevorHeater::log_frame_raw(const char* direction, const std::vector<uint8_t> &frame) {
+  if (frame.empty()) return;
+  std::string hex;
+  hex.reserve(frame.size() * 3 + 1);
+  for (size_t i = 0; i < frame.size(); ++i) {
+    if (i) hex += ' ';
+    char buf[4];
+    snprintf(buf, sizeof(buf), "%02X", frame[i]);
+    hex += buf;
+  }
+  ESP_LOGI(TAG, "[%s] raw (%zu bytes): %s", direction, frame.size(), hex.c_str());
+}
+
+void VevorHeater::log_decode_attempt(const std::vector<uint8_t> &frame, uint8_t expected_length) {
+  if (frame.size() < 4) return;
+  uint8_t calc_csum = calculate_checksum(frame);
+  uint8_t recv_csum = frame[frame.size() - 1];
+  ESP_LOGI(TAG, "[decode] len=%d expected=%d device_id=0x%02X len_byte=0x%02X checksum calc=0x%02X recv=0x%02X %s",
+           (int)frame.size(), expected_length, frame[1], frame[3], calc_csum, recv_csum,
+           calc_csum == recv_csum ? "OK" : "MISMATCH");
+  if (frame[3] == HEATER_FRAME_LENGTH && frame.size() >= 57) {
+    uint8_t state_raw = frame[5];
+    uint8_t power_raw = frame[6];
+    uint16_t voltage_raw = read_uint16_be(frame, 10);
+    uint8_t glow_raw = frame[13];
+    uint8_t cooling = frame[14];
+    int16_t temp_raw = static_cast<int16_t>(read_uint16_be(frame, 16));
+    uint16_t duration_raw = read_uint16_be(frame, 20);
+    uint8_t pump_raw = frame[23];
+    uint16_t fan_raw = read_uint16_be(frame, 28);
+    ESP_LOGI(TAG, "[decode] long frame: state=0x%02X power=%u voltage_raw=%u(%.1fV) glow=%u cooling=%u temp_raw=%d(%.1fC) duration=%u pump=%.1fHz fan=%u",
+             state_raw, power_raw, voltage_raw, voltage_raw / 10.0f, glow_raw, cooling,
+             (int)temp_raw, temp_raw / 10.0f, duration_raw, pump_raw / 10.0f, fan_raw);
+  } else if (frame[3] == CONTROLLER_FRAME_LENGTH && frame.size() >= 16) {
+    ESP_LOGI(TAG, "[decode] short frame (controller): cmd=0x%02X power=0x%02X state_byte=0x%02X",
+             frame[2], frame[8], frame[9]);
+  }
+}
+
 void VevorHeater::send_controller_frame() {
   std::vector<uint8_t> frame;
   
@@ -256,6 +303,13 @@ void VevorHeater::send_controller_frame() {
   // Calculate and add checksum
   uint8_t checksum = calculate_checksum(frame);
   frame.push_back(checksum);                // 15: Checksum
+  
+  if (passive_sniff_mode_) {
+    log_frame_raw("TX (suppressed)", frame);
+    ESP_LOGI(TAG, "TX not sent (passive sniff mode): enabled=%s, power=%d, state=0x%02X",
+             YESNO(heater_enabled_), power_level_, frame[9]);
+    return;
+  }
   
   // Send frame
   this->write_array(frame.data(), frame.size());
@@ -777,6 +831,7 @@ void VevorHeater::set_power_level_percent(float percent) {
 
 void VevorHeater::dump_config() {
   ESP_LOGCONFIG(TAG, "Vevor Heater:");
+  ESP_LOGCONFIG(TAG, "  Passive Sniff: %s", passive_sniff_mode_ ? "yes (RX/decode log only, no TX)" : "no");
   ESP_LOGCONFIG(TAG, "  Control Mode: %s", control_mode_ == ControlMode::AUTOMATIC ? "Automatic" : "Manual");
   ESP_LOGCONFIG(TAG, "  Default Power Level: %.0f%%", default_power_percent_);
   ESP_LOGCONFIG(TAG, "  Power Level: %d/10", power_level_);

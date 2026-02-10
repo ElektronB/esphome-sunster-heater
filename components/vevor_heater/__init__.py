@@ -45,6 +45,7 @@ CONF_DEFAULT_POWER_PERCENT = "default_power_percent"
 CONF_EXTERNAL_TEMPERATURE_SENSOR = "external_temperature_sensor"
 CONF_INJECTED_PER_PULSE = "injected_per_pulse"
 CONF_INJECTED_PER_PULSE_NUMBER = "injected_per_pulse_number"
+CONF_PASSIVE_SNIFF = "passive_sniff"
 CONF_POLLING_INTERVAL = "polling_interval"
 CONF_RESET_TOTAL_CONSUMPTION_BUTTON = "reset_total_consumption_button"
 CONF_POWER_SWITCH = "power_switch"
@@ -162,6 +163,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_INJECTED_PER_PULSE, default=0.022): cv.float_range(
                 min=0.001, max=1.0
             ),
+            cv.Optional(CONF_PASSIVE_SNIFF, default=False): cv.boolean,
             cv.Optional(CONF_POLLING_INTERVAL, default="60s"): cv.positive_time_period_milliseconds,
             cv.Optional(CONF_TIME_ID): cv.use_id(time.RealTimeClock),
             cv.Optional(CONF_EXTERNAL_TEMPERATURE_SENSOR): cv.use_id(sensor.Sensor),
@@ -266,6 +268,9 @@ async def to_code(config):
     
     # Set injected per pulse
     cg.add(var.set_injected_per_pulse(config[CONF_INJECTED_PER_PULSE]))
+    
+    # Passive sniff mode (log RX/decode only, never send)
+    cg.add(var.set_passive_sniff_mode(config[CONF_PASSIVE_SNIFF]))
     
     # Set polling interval
     cg.add(var.set_polling_interval(config[CONF_POLLING_INTERVAL]))
