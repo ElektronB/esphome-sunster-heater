@@ -291,7 +291,7 @@ When `auto_sensors: true` (default), these sensors are automatically created:
 | Power Level                  | Current power level           | %    | Power        |
 | Fan Speed                    | Combustion fan speed          | RPM  | -            |
 | Pump Frequency               | Fuel pump frequency           | Hz   | -            |
-| Glow Plug Current            | Glow plug current draw        | A    | Current      |
+| Glow Plug Status             | Glow plug phase (Preheat / Ignition / Off) | -    | -            |
 | State Duration               | Time in current state         | s    | Duration     |
 | Cooling Down                 | Cooling down status           | -    | -            |
 | Hourly Consumption           | Instantaneous fuel rate       | ml/h | -            |

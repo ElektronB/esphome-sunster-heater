@@ -62,7 +62,7 @@ CONF_STATE = "state"
 CONF_POWER_LEVEL = "power_level"
 CONF_FAN_SPEED = "fan_speed"
 CONF_PUMP_FREQUENCY = "pump_frequency"
-CONF_GLOW_PLUG_CURRENT = "glow_plug_current"
+CONF_GLOW_PLUG_STATUS = "glow_plug_status"
 CONF_HEAT_EXCHANGER_TEMPERATURE = "heat_exchanger_temperature"
 CONF_STATE_DURATION = "state_duration"
 CONF_COOLING_DOWN = "cooling_down"
@@ -104,11 +104,8 @@ SENSOR_SCHEMAS = {
         state_class=STATE_CLASS_MEASUREMENT,
         accuracy_decimals=1,
     ),
-    CONF_GLOW_PLUG_CURRENT: sensor.sensor_schema(
-        unit_of_measurement=UNIT_AMPERE,
-        device_class=DEVICE_CLASS_CURRENT,
-        state_class=STATE_CLASS_MEASUREMENT,
-        accuracy_decimals=1,
+    CONF_GLOW_PLUG_STATUS: text_sensor.text_sensor_schema(
+        icon="mdi:fire",
     ),
     CONF_HEAT_EXCHANGER_TEMPERATURE: sensor.sensor_schema(
         unit_of_measurement=UNIT_CELSIUS,
@@ -295,7 +292,6 @@ async def to_code(config):
             (CONF_POWER_LEVEL, "set_power_level_sensor"),
             (CONF_FAN_SPEED, "set_fan_speed_sensor"),
             (CONF_PUMP_FREQUENCY, "set_pump_frequency_sensor"),
-            (CONF_GLOW_PLUG_CURRENT, "set_glow_plug_current_sensor"),
             (CONF_HEAT_EXCHANGER_TEMPERATURE, "set_heat_exchanger_temperature_sensor"),
             (CONF_STATE_DURATION, "set_state_duration_sensor"),
             (CONF_HOURLY_CONSUMPTION, "set_hourly_consumption_sensor"),
@@ -305,6 +301,7 @@ async def to_code(config):
 
         text_sensors_to_create = [
             (CONF_STATE, "set_state_sensor"),
+            (CONF_GLOW_PLUG_STATUS, "set_glow_plug_status_sensor"),
         ]
 
         binary_sensors_to_create = [
@@ -356,13 +353,13 @@ async def to_code(config):
             (CONF_POWER_LEVEL, "set_power_level_sensor", sensor.new_sensor),
             (CONF_FAN_SPEED, "set_fan_speed_sensor", sensor.new_sensor),
             (CONF_PUMP_FREQUENCY, "set_pump_frequency_sensor", sensor.new_sensor),
-            (CONF_GLOW_PLUG_CURRENT, "set_glow_plug_current_sensor", sensor.new_sensor),
             (CONF_HEAT_EXCHANGER_TEMPERATURE, "set_heat_exchanger_temperature_sensor", sensor.new_sensor),
             (CONF_STATE_DURATION, "set_state_duration_sensor", sensor.new_sensor),
             (CONF_HOURLY_CONSUMPTION, "set_hourly_consumption_sensor", sensor.new_sensor),
             (CONF_DAILY_CONSUMPTION, "set_daily_consumption_sensor", sensor.new_sensor),
             (CONF_TOTAL_CONSUMPTION, "set_total_consumption_sensor", sensor.new_sensor),
             (CONF_STATE, "set_state_sensor", text_sensor.new_text_sensor),
+            (CONF_GLOW_PLUG_STATUS, "set_glow_plug_status_sensor", text_sensor.new_text_sensor),
             (CONF_COOLING_DOWN, "set_cooling_down_sensor", binary_sensor.new_binary_sensor),
             (CONF_LOW_VOLTAGE_ERROR, "set_low_voltage_error_sensor", binary_sensor.new_binary_sensor),
         ]

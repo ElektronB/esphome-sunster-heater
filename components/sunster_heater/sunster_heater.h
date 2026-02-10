@@ -103,7 +103,7 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   void set_power_level_sensor(sensor::Sensor *sensor) { power_level_sensor_ = sensor; }
   void set_fan_speed_sensor(sensor::Sensor *sensor) { fan_speed_sensor_ = sensor; }
   void set_pump_frequency_sensor(sensor::Sensor *sensor) { pump_frequency_sensor_ = sensor; }
-  void set_glow_plug_current_sensor(sensor::Sensor *sensor) { glow_plug_current_sensor_ = sensor; }
+  void set_glow_plug_status_sensor(text_sensor::TextSensor *sensor) { glow_plug_status_sensor_ = sensor; }
   void set_heat_exchanger_temperature_sensor(sensor::Sensor *sensor) { heat_exchanger_temperature_sensor_ = sensor; }
   void set_state_duration_sensor(sensor::Sensor *sensor) { state_duration_sensor_ = sensor; }
   void set_cooling_down_sensor(binary_sensor::BinarySensor *sensor) { cooling_down_sensor_ = sensor; }
@@ -211,7 +211,6 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   float heat_exchanger_temperature_{0.0};
   uint16_t fan_speed_{0};
   float pump_frequency_{0.0};
-  float glow_plug_current_{0.0};
   uint16_t state_duration_{0};
   bool cooling_down_{false};
   bool low_voltage_error_{false};
@@ -234,7 +233,7 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   sensor::Sensor *power_level_sensor_{nullptr};
   sensor::Sensor *fan_speed_sensor_{nullptr};
   sensor::Sensor *pump_frequency_sensor_{nullptr};
-  sensor::Sensor *glow_plug_current_sensor_{nullptr};
+  text_sensor::TextSensor *glow_plug_status_sensor_{nullptr};
   sensor::Sensor *heat_exchanger_temperature_sensor_{nullptr};
   sensor::Sensor *state_duration_sensor_{nullptr};
   binary_sensor::BinarySensor *cooling_down_sensor_{nullptr};

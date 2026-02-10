@@ -322,9 +322,8 @@ void SunsterHeater::send_controller_frame() {
 }
 
 // 57-byte heater frame (from log analysis): 0=AA 1=77 2=cmd 3=0x34, 5=state, 6=power(1-10),
-// 10-11=voltage, 13=constant 0xB8, 14=cooling, 15=varies at start (13→2→8→0; candidate glow or sub-state),
-// 10-11=voltage BE/10, 13=0xB8 const (not glow current), 14=cooling, 16-17=temp BE/10,
-// 20-21=duration BE, 23=pump/10 Hz, 28-29=fan BE. 48-51 observed 24 09 20 10 (room/target?).
+// 10-11=voltage BE/10, 13=0xB8 const, 14=cooling, 15=sub-state, 16-17=temp BE/10,
+// 20-21=duration BE, 23=pump/10 Hz, 28-29=fan BE. Bytes 46+ often 24 09 20 10 then varying.
 void SunsterHeater::process_heater_frame(const std::vector<uint8_t> &frame) {
   if (frame[3] == HEATER_FRAME_LENGTH && frame.size() >= 57) {
     // Long frame from heater
@@ -377,11 +376,14 @@ void SunsterHeater::update_sensors(const std::vector<uint8_t> &frame) {
     }
   }
   
-  // Glow plug current: Byte 13 is constant 0xB8 in observed Sunster frames (not current).
-  // Not decoded; sensor shows 0 until protocol mapping is confirmed.
-  if (glow_plug_current_sensor_) {
-    glow_plug_current_ = 0.0f;
-    glow_plug_current_sensor_->publish_state(0.0f);  // unknown in this protocol
+  // Glow plug status (derived from state + fan): Preheat / Ignition / Off
+  if (glow_plug_status_sensor_ && frame.size() > 29) {
+    uint16_t fan = read_uint16_be(frame, 28);
+    const char *status = "Off";
+    if (current_state_ == HeaterState::POLLING_STATE) {
+      status = (fan == 0) ? "Preheat" : "Ignition";
+    }
+    glow_plug_status_sensor_->publish_state(status);
   }
   
   // Cooling down flag (byte 14)
@@ -757,6 +759,9 @@ void SunsterHeater::handle_communication_timeout() {
   if (state_sensor_) {
     state_sensor_->publish_state("Disconnected");
   }
+  if (glow_plug_status_sensor_) {
+    glow_plug_status_sensor_->publish_state("Unknown");
+  }
 }
 
 const char* SunsterHeater::state_to_string(HeaterState state) {
@@ -874,7 +879,7 @@ void SunsterHeater::dump_config() {
   LOG_SENSOR("  ", "Power Level", power_level_sensor_);
   LOG_SENSOR("  ", "Fan Speed", fan_speed_sensor_);
   LOG_SENSOR("  ", "Pump Frequency", pump_frequency_sensor_);
-  LOG_SENSOR("  ", "Glow Plug Current", glow_plug_current_sensor_);
+  LOG_TEXT_SENSOR("  ", "Glow Plug Status", glow_plug_status_sensor_);
   LOG_SENSOR("  ", "Heat Exchanger Temperature", heat_exchanger_temperature_sensor_);
   LOG_SENSOR("  ", "State Duration", state_duration_sensor_);
   LOG_BINARY_SENSOR("  ", "Cooling Down", cooling_down_sensor_);
