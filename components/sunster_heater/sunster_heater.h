@@ -291,7 +291,8 @@ class SunsterHeaterPowerSwitch : public switch_::Switch, public Component {
   void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
 
  protected:
-  void update() override {
+  void loop() override {
+    Component::loop();
     if (heater_ && heater_->is_manual_mode() && heater_->is_state_synced_once() && !initial_state_published_) {
       this->publish_state(heater_->get_heater_enabled());
       initial_state_published_ = true;
