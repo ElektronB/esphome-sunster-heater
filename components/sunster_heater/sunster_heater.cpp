@@ -619,23 +619,24 @@ void SunsterHeater::reset_total_consumption() {
 void SunsterHeater::check_voltage_safety() {
   bool voltage_error = false;
   
-  // Check voltage thresholds based on state
-  if ((current_state_ == HeaterState::OFF || current_state_ == HeaterState::POLLING_STATE) && 
-      heater_enabled_) {
-    // During OFF/POLLING_STATE, check if voltage is sufficient to start
-    if (input_voltage_ < min_voltage_start_) {
-      ESP_LOGW(TAG, "Low voltage detected during start: %.1fV < %.1fV", 
-               input_voltage_, min_voltage_start_);
-      voltage_error = true;
-      heater_enabled_ = false;  // Prevent starting
-    }
-  } else if (current_state_ == HeaterState::STABLE_COMBUSTION) {
-    // During stable combustion, check if voltage is sufficient to keep running
-    if (input_voltage_ < min_voltage_operate_) {
-      ESP_LOGW(TAG, "Low voltage detected during operation: %.1fV < %.1fV - Stopping heater", 
-               input_voltage_, min_voltage_operate_);
-      voltage_error = true;
-      heater_enabled_ = false;  // Force stop
+  // Only use voltage checks when we have a valid reading (heater often reports 0 V when off)
+  bool voltage_valid = (input_voltage_ > 0.0f);
+  if (voltage_valid) {
+    if ((current_state_ == HeaterState::OFF || current_state_ == HeaterState::POLLING_STATE) &&
+        heater_enabled_) {
+      if (input_voltage_ < min_voltage_start_) {
+        ESP_LOGW(TAG, "Low voltage during start: %.1fV < %.1fV",
+                 input_voltage_, min_voltage_start_);
+        voltage_error = true;
+        heater_enabled_ = false;
+      }
+    } else if (current_state_ == HeaterState::STABLE_COMBUSTION) {
+      if (input_voltage_ < min_voltage_operate_) {
+        ESP_LOGW(TAG, "Low voltage during operation: %.1fV < %.1fV - Stopping heater",
+                 input_voltage_, min_voltage_operate_);
+        voltage_error = true;
+        heater_enabled_ = false;
+      }
     }
   }
   

@@ -307,9 +307,20 @@ class SunsterHeaterPowerSwitch : public switch_::Switch, public Component {
  protected:
   void loop() override {
     Component::loop();
-    if (heater_ && heater_->is_state_synced_once() && !initial_state_published_) {
-      this->publish_state(heater_->get_heater_enabled());
-      initial_state_published_ = true;
+    if (!heater_) return;
+    uint32_t now = millis();
+    if (heater_->is_state_synced_once()) {
+      if (!initial_state_published_) {
+        this->publish_state(heater_->get_heater_enabled());
+        initial_state_published_ = true;
+        last_sync_publish_ = now;
+      } else if (now - last_sync_publish_ >= 2000u) {
+        this->publish_state(heater_->get_heater_enabled());
+        last_sync_publish_ = now;
+      }
+    } else if (!pre_sync_published_ && now > 500u) {
+      this->publish_state(false);
+      pre_sync_published_ = true;
     }
   }
   void write_state(bool state) override {
@@ -325,6 +336,8 @@ class SunsterHeaterPowerSwitch : public switch_::Switch, public Component {
 
   SunsterHeater *heater_{nullptr};
   bool initial_state_published_{false};
+  bool pre_sync_published_{false};
+  uint32_t last_sync_publish_{0};
 };
 
 // Number component for power level control (Manual mode only)
@@ -359,20 +372,31 @@ class SunsterControlModeSelect : public select::Select, public Component {
   void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
 
   void setup() override {
-    if (heater_) {
-      if (heater_->is_manual_mode()) {
-        this->publish_state("Manual");
-      } else if (heater_->is_automatic_mode()) {
-        this->publish_state("Automatic");
-      } else if (heater_->is_antifreeze_mode()) {
-        this->publish_state("Antifreeze");
-      } else {
-        this->publish_state("Manual");
-      }
-    }
+    publish_mode_state_();
   }
 
  protected:
+  void publish_mode_state_() {
+    if (!heater_) return;
+    if (heater_->is_manual_mode()) {
+      this->publish_state("Manual");
+    } else if (heater_->is_automatic_mode()) {
+      this->publish_state("Automatic");
+    } else if (heater_->is_antifreeze_mode()) {
+      this->publish_state("Antifreeze");
+    } else {
+      this->publish_state("Manual");
+    }
+  }
+  void loop() override {
+    Component::loop();
+    if (!heater_) return;
+    uint32_t now = millis();
+    if (now < 30000u && (now - last_mode_publish_) >= 2000u) {
+      last_mode_publish_ = now;
+      publish_mode_state_();
+    }
+  }
   void control(const std::string &value) override {
     if (heater_) {
       if (value == "Manual") {
@@ -387,6 +411,7 @@ class SunsterControlModeSelect : public select::Select, public Component {
   }
 
   SunsterHeater *heater_{nullptr};
+  uint32_t last_mode_publish_{0};
 };
 
 }  // namespace sunster_heater
