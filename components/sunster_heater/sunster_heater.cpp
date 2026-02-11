@@ -604,16 +604,28 @@ void SunsterHeater::load_fuel_consumption_data() {
 }
 
 void SunsterHeater::load_config_data() {
+  ESP_LOGI(TAG, "Loading config. Current (YAML) defaults: Kp=%.2f Ki=%.2f Target=%.1f", pi_kp_, pi_ki_, target_temperature_);
   HeaterConfigData data;
-  if (pref_config_.load(&data) && data.version == 1) {
-    pi_kp_ = data.pi_kp;
-    pi_ki_ = data.pi_ki;
-    target_temperature_ = data.target_temperature;
-    pi_output_min_off_ = data.pi_output_min_off;
-    pi_output_min_on_ = data.pi_output_min_on;
-    injected_per_pulse_ = data.injected_per_pulse;
-    ESP_LOGI(TAG, "Loaded persisted config: Kp=%.2f Ki=%.2f target=%.1f°C hyst=%.0f/%.0f%% inj=%.3f",
-             pi_kp_, pi_ki_, target_temperature_, pi_output_min_off_, pi_output_min_on_, injected_per_pulse_);
+  if (pref_config_.load(&data)) {
+    ESP_LOGI(TAG, "Preference loaded. Version: %u", data.version);
+    if (data.version == 1) {
+      if (std::isnan(data.pi_kp) || std::isnan(data.pi_ki) || std::isnan(data.target_temperature)) {
+         ESP_LOGW(TAG, "Loaded config contains NAN values! forcing defaults.");
+         save_config_data();
+         return;
+      }
+      pi_kp_ = data.pi_kp;
+      pi_ki_ = data.pi_ki;
+      target_temperature_ = data.target_temperature;
+      pi_output_min_off_ = data.pi_output_min_off;
+      pi_output_min_on_ = data.pi_output_min_on;
+      injected_per_pulse_ = data.injected_per_pulse;
+      ESP_LOGI(TAG, "Loaded persisted config: Kp=%.2f Ki=%.2f target=%.1f°C hyst=%.0f/%.0f%% inj=%.3f",
+               pi_kp_, pi_ki_, target_temperature_, pi_output_min_off_, pi_output_min_on_, injected_per_pulse_);
+    } else {
+      ESP_LOGW(TAG, "Config version mismatch (found %u, expected 1). Using defaults.", data.version);
+      save_config_data();
+    }
   } else {
     ESP_LOGI(TAG, "No persisted config found, using YAML defaults");
     save_config_data();
