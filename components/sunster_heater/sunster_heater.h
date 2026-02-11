@@ -310,13 +310,20 @@ class SunsterHeaterPowerSwitch : public switch_::Switch, public Component {
     if (!heater_) return;
     uint32_t now = millis();
     if (heater_->is_state_synced_once()) {
+      bool current_enabled = heater_->get_heater_enabled();
       if (!initial_state_published_) {
-        this->publish_state(heater_->get_heater_enabled());
+        // First publish after sync - always publish current state
+        this->publish_state(current_enabled);
         initial_state_published_ = true;
         last_sync_publish_ = now;
-      } else if (now - last_sync_publish_ >= 2000u) {
-        this->publish_state(heater_->get_heater_enabled());
-        last_sync_publish_ = now;
+        last_published_state_ = current_enabled;
+      } else {
+        // Keep switch in sync: publish if state changed or every 2s
+        if (current_enabled != last_published_state_ || (now - last_sync_publish_ >= 2000u)) {
+          this->publish_state(current_enabled);
+          last_sync_publish_ = now;
+          last_published_state_ = current_enabled;
+        }
       }
     } else if (!pre_sync_published_ && now > 500u) {
       this->publish_state(false);
@@ -331,12 +338,17 @@ class SunsterHeaterPowerSwitch : public switch_::Switch, public Component {
         heater_->turn_off();
       }
       this->publish_state(state);
+      last_published_state_ = state;
+      if (heater_->is_state_synced_once()) {
+        last_sync_publish_ = millis();
+      }
     }
   }
 
   SunsterHeater *heater_{nullptr};
   bool initial_state_published_{false};
   bool pre_sync_published_{false};
+  bool last_published_state_{false};
   uint32_t last_sync_publish_{0};
 };
 
