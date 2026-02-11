@@ -69,7 +69,7 @@ struct FuelConsumptionData {
 
 // Config structure for persistence (PI, target temp, hysteresis, injected_per_pulse)
 struct HeaterConfigData {
-  uint32_t version{1};
+  uint32_t version{2};
   float pi_kp;
   float pi_ki;
   float target_temperature;
@@ -448,7 +448,6 @@ class SunsterPiKpNumber : public number::Number, public Component {
   void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
   float get_setup_priority() const override { return setup_priority::AFTER_CONNECTION; }
   void setup() override {
-    ESP_LOGD("SunsterHeater", "Setting up SunsterPiKpNumber");
     if (heater_) this->publish_state(heater_->get_pi_kp());
   }
   void dump_config() override {
@@ -611,7 +610,6 @@ class SunsterControlModeSelect : public select::Select, public Component {
   float get_setup_priority() const override { return setup_priority::AFTER_CONNECTION; }
 
   void setup() override {
-    ESP_LOGD("SunsterHeater", "Setting up SunsterControlModeSelect");
     publish_mode_state_();
   }
   void dump_config() override {

@@ -608,7 +608,7 @@ void SunsterHeater::load_config_data() {
   HeaterConfigData data;
   if (pref_config_.load(&data)) {
     ESP_LOGI(TAG, "Preference loaded. Version: %u", data.version);
-    if (data.version == 1) {
+    if (data.version == 2) {
       if (std::isnan(data.pi_kp) || std::isnan(data.pi_ki) || std::isnan(data.target_temperature)) {
          ESP_LOGW(TAG, "Loaded config contains NAN values! forcing defaults.");
          save_config_data();
@@ -623,7 +623,7 @@ void SunsterHeater::load_config_data() {
       ESP_LOGI(TAG, "Loaded persisted config: Kp=%.2f Ki=%.2f target=%.1f°C hyst=%.0f/%.0f%% inj=%.3f",
                pi_kp_, pi_ki_, target_temperature_, pi_output_min_off_, pi_output_min_on_, injected_per_pulse_);
     } else {
-      ESP_LOGW(TAG, "Config version mismatch (found %u, expected 1). Using defaults.", data.version);
+      ESP_LOGW(TAG, "Config version mismatch (found %u, expected 2). Using defaults.", data.version);
       save_config_data();
     }
   } else {
@@ -634,7 +634,7 @@ void SunsterHeater::load_config_data() {
 
 void SunsterHeater::save_config_data() {
   HeaterConfigData data;
-  data.version = 1;
+  data.version = 2;
   data.pi_kp = pi_kp_;
   data.pi_ki = pi_ki_;
   data.target_temperature = target_temperature_;
