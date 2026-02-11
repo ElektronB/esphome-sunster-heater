@@ -101,6 +101,9 @@ sunster_heater:
     name: "Heizung PI Kd"
   pi_off_delay_number:
     name: "Heizung Abschalt-Verzögerung (s)"
+    min_value: 0
+    max_value: 600
+    step: 10
   target_temperature_number:
     name: "Heizung Solltemperatur"
   pi_output_min_off_number:

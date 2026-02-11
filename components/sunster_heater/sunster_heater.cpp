@@ -873,6 +873,8 @@ void SunsterHeater::handle_automatic_mode() {
         time_entered_off_region_ = now;
         ESP_LOGD(TAG, "PI output %.1f%% < min off %.1f%%. Starting off-timer (wait %.0fs)", 
                  output, pi_output_min_off_, pi_off_delay_);
+        // Set power to minimum while waiting for off-timer to prevent overheating
+        set_power_level_percent(pi_output_min_on_);
       } else {
         // Timer already running, check if duration exceeded
         float elapsed_s = (now - time_entered_off_region_) / 1000.0f;
