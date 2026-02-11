@@ -444,9 +444,11 @@ class SunsterHeaterPowerLevelNumber : public number::Number, public Component {
 // Number component for PI Kp (automatic mode)
 class SunsterPiKpNumber : public number::Number, public Component {
  public:
+  SunsterPiKpNumber() { }
   void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
   float get_setup_priority() const override { return setup_priority::AFTER_CONNECTION; }
   void setup() override {
+    ESP_LOGD("SunsterHeater", "Setting up SunsterPiKpNumber");
     if (heater_) this->publish_state(heater_->get_pi_kp());
   }
   void dump_config() override {
@@ -604,10 +606,12 @@ class SunsterPiOutputMinOnNumber : public number::Number, public Component {
 // Select component for control mode
 class SunsterControlModeSelect : public select::Select, public Component {
  public:
+  SunsterControlModeSelect() { }
   void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
   float get_setup_priority() const override { return setup_priority::AFTER_CONNECTION; }
 
   void setup() override {
+    ESP_LOGD("SunsterHeater", "Setting up SunsterControlModeSelect");
     publish_mode_state_();
   }
   void dump_config() override {
