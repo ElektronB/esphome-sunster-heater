@@ -299,6 +299,9 @@ class SunsterInjectedPerPulseNumber : public number::Number, public Component {
   void setup() override {
     if (heater_) this->publish_state(heater_->get_injected_per_pulse());
   }
+  void dump_config() override {
+    LOG_NUMBER("", "Sunster Heater Injected Per Pulse", this);
+  }
 
  protected:
   void loop() override {
@@ -327,6 +330,9 @@ class SunsterInjectedPerPulseNumber : public number::Number, public Component {
 class SunsterResetTotalConsumptionButton : public button::Button, public Component {
  public:
   void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
+  void dump_config() override {
+    LOG_BUTTON("", "Sunster Heater Reset Total", this);
+  }
 
  protected:
   void press_action() override {
@@ -342,6 +348,9 @@ class SunsterResetTotalConsumptionButton : public button::Button, public Compone
 class SunsterHeaterPowerSwitch : public switch_::Switch, public Component {
  public:
   void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
+  void dump_config() override {
+    LOG_SWITCH("", "Sunster Heater Power Switch", this);
+  }
 
  protected:
   void loop() override {
@@ -403,6 +412,9 @@ class SunsterHeaterPowerLevelNumber : public number::Number, public Component {
       this->publish_state(heater_->get_power_level_percent());
     }
   }
+  void dump_config() override {
+    LOG_NUMBER("", "Sunster Heater Power Level", this);
+  }
 
  protected:
   void loop() override {
@@ -437,6 +449,9 @@ class SunsterPiKpNumber : public number::Number, public Component {
   void setup() override {
     if (heater_) this->publish_state(heater_->get_pi_kp());
   }
+  void dump_config() override {
+    LOG_NUMBER("", "Sunster Heater PI Kp", this);
+  }
  protected:
   void loop() override {
     Component::loop();
@@ -465,6 +480,9 @@ class SunsterPiKiNumber : public number::Number, public Component {
   float get_setup_priority() const override { return setup_priority::AFTER_CONNECTION; }
   void setup() override {
     if (heater_) this->publish_state(heater_->get_pi_ki());
+  }
+  void dump_config() override {
+    LOG_NUMBER("", "Sunster Heater PI Ki", this);
   }
  protected:
   void loop() override {
@@ -495,6 +513,9 @@ class SunsterTargetTemperatureNumber : public number::Number, public Component {
   void setup() override {
     if (heater_) this->publish_state(heater_->get_target_temperature());
   }
+  void dump_config() override {
+    LOG_NUMBER("", "Sunster Heater Target Temp", this);
+  }
  protected:
   void loop() override {
     Component::loop();
@@ -523,6 +544,9 @@ class SunsterPiOutputMinOffNumber : public number::Number, public Component {
   float get_setup_priority() const override { return setup_priority::AFTER_CONNECTION; }
   void setup() override {
     if (heater_) this->publish_state(heater_->get_pi_output_min_off());
+  }
+  void dump_config() override {
+    LOG_NUMBER("", "Sunster Heater PI Min Off", this);
   }
  protected:
   void loop() override {
@@ -553,6 +577,9 @@ class SunsterPiOutputMinOnNumber : public number::Number, public Component {
   void setup() override {
     if (heater_) this->publish_state(heater_->get_pi_output_min_on());
   }
+  void dump_config() override {
+    LOG_NUMBER("", "Sunster Heater PI Min On", this);
+  }
  protected:
   void loop() override {
     Component::loop();
@@ -582,6 +609,9 @@ class SunsterControlModeSelect : public select::Select, public Component {
 
   void setup() override {
     publish_mode_state_();
+  }
+  void dump_config() override {
+    LOG_SELECT("", "Sunster Heater Control Mode", this);
   }
 
  protected:

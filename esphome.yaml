@@ -1,0 +1,114 @@
+esphome:
+  name: van-heizung
+  friendly_name: van-heizung
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+# external_components:
+#   - source: github://ElektronB/esphome-sunster-heater@main
+#     components: [sunster_heater]
+#     refresh: 0s  # Einmalig: Cache neu laden, danach z.B. 1d
+
+external_components:
+  - source: components
+    components: [sunster_heater]
+
+logger:
+  level: DEBUG
+
+api:
+  encryption:
+    key: "ieLzn/ZYWI8TX5wVKSPcZHNtjeXI4d8JnEH8RTjOGDI="
+
+web_server:
+  port: 80
+
+ota:
+  - platform: esphome
+    password: "3760e2680917e59e38dc8d3a80e7dcba"
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+uart:
+  id: heater_uart
+  rx_pin:
+    number: GPIO19
+    inverted: true
+  tx_pin:
+    number: GPIO18
+    inverted: true
+  baud_rate: 4800
+
+# 1-Wire Bus (DS18B20 o.ä.) – 4,7 kΩ Pull-up zwischen Data und 3,3 V
+# Pin: GPIO4, GPIO32 oder GPIO33 (ESP32: nur Pins mit Ein+Ausgang; GPIO28 existiert am ESP32 nicht)
+one_wire:
+  - platform: gpio
+    pin: GPIO33
+    id: one_wire_bus
+
+sensor:
+  # Index 0 = Raumtemperatur (für PI-Regelung), Index 1 = Luftauslass
+  # Bei mehreren Sensoren besser address: 0x... aus dem Log verwenden (stabil)
+  - platform: dallas_temp
+    one_wire_id: one_wire_bus
+    index: 0
+    id: raumtemperatur
+    name: "Raumtemperatur"
+    update_interval: 5s
+  - platform: dallas_temp
+    one_wire_id: one_wire_bus
+    index: 1
+    id: luftauslass
+    name: "Luftauslass Temperatur"
+    update_interval: 5s
+
+sunster_heater:
+  id: my_heater
+  uart_id: heater_uart
+  # passive_sniff: true   # Nur RX loggen + Decode, kein Senden (nur wenn Komponente diese Option hat)
+  control_mode: automatic
+  external_temperature_sensor: raumtemperatur
+  target_temperature: 18.0
+  # PI-Regler: Stellwert 0–100 %, unter min_off aus, ab min_on ein
+  pi_kp: 1.0
+  pi_ki: 0.5
+  pi_output_min_off: 3.0
+  pi_output_min_on: 15.0
+  default_power_percent: 10
+  min_voltage_start: 12.0
+  min_voltage_operate: 10.0
+  polling_interval: 5s
+  injected_per_pulse: 0.022
+
+  power_switch:
+    name: "Heizung Ein-Aus"
+  power_level_number:
+    name: "Heizung Leistung"
+  control_mode_select:
+    name: "Heizung Modus"
+
+  # Automatik-Modus: PI-Regler + Hysterese (UI-einstellbar)
+  pi_kp_number:
+    name: "Heizung PI Kp"
+  pi_ki_number:
+    name: "Heizung PI Ki"
+  target_temperature_number:
+    name: "Heizung Solltemperatur"
+  pi_output_min_off_number:
+    name: "Heizung Hysterese Aus (Stellwert %)"
+  pi_output_min_on_number:
+    name: "Heizung Hysterese Ein (Stellwert %)"
+
+  injected_per_pulse_number:
+    name: "Fuel Injected Per Pulse"
+    min_value: 0.001
+    max_value: 0.10
+    step: 0.001
+
+  reset_total_consumption_button:
+    name: "Reset Total Fuel Consumption"
