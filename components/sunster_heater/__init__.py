@@ -37,6 +37,8 @@ SunsterHeaterPowerSwitch = sunster_heater_ns.class_("SunsterHeaterPowerSwitch", 
 SunsterHeaterPowerLevelNumber = sunster_heater_ns.class_("SunsterHeaterPowerLevelNumber", number.Number, cg.Component)
 SunsterPiKpNumber = sunster_heater_ns.class_("SunsterPiKpNumber", number.Number, cg.Component)
 SunsterPiKiNumber = sunster_heater_ns.class_("SunsterPiKiNumber", number.Number, cg.Component)
+SunsterPiKdNumber = sunster_heater_ns.class_("SunsterPiKdNumber", number.Number, cg.Component)
+SunsterPiOffDelayNumber = sunster_heater_ns.class_("SunsterPiOffDelayNumber", number.Number, cg.Component)
 SunsterTargetTemperatureNumber = sunster_heater_ns.class_("SunsterTargetTemperatureNumber", number.Number, cg.Component)
 SunsterPiOutputMinOffNumber = sunster_heater_ns.class_("SunsterPiOutputMinOffNumber", number.Number, cg.Component)
 SunsterPiOutputMinOnNumber = sunster_heater_ns.class_("SunsterPiOutputMinOnNumber", number.Number, cg.Component)
@@ -57,6 +59,8 @@ CONF_POWER_SWITCH = "power_switch"
 CONF_POWER_LEVEL_NUMBER = "power_level_number"
 CONF_PI_KP_NUMBER = "pi_kp_number"
 CONF_PI_KI_NUMBER = "pi_ki_number"
+CONF_PI_KD_NUMBER = "pi_kd_number"
+CONF_PI_OFF_DELAY_NUMBER = "pi_off_delay_number"
 CONF_TARGET_TEMPERATURE_NUMBER = "target_temperature_number"
 CONF_PI_OUTPUT_MIN_OFF_NUMBER = "pi_output_min_off_number"
 CONF_PI_OUTPUT_MIN_ON_NUMBER = "pi_output_min_on_number"
@@ -136,7 +140,7 @@ SENSOR_SCHEMAS = {
     CONF_PI_OUTPUT: sensor.sensor_schema(
         unit_of_measurement=UNIT_PERCENT,
         state_class=STATE_CLASS_MEASUREMENT,
-        accuracy_decimals=0,
+        accuracy_decimals=1,
         icon=ICON_POWER,
     ),
     CONF_LOW_VOLTAGE_ERROR: binary_sensor.binary_sensor_schema(
@@ -189,6 +193,12 @@ CONFIG_SCHEMA = cv.All(
             ),
             cv.Optional("pi_ki", default=0.5): cv.float_range(
                 min=0.0, max=5.0
+            ),
+            cv.Optional("pi_kd", default=0.0): cv.float_range(
+                min=0.0, max=50.0
+            ),
+            cv.Optional("pi_off_delay", default=60.0): cv.float_range(
+                min=0.0, max=600.0
             ),
             cv.Optional("pi_output_min_off", default=3.0): cv.float_range(
                 min=0.0, max=20.0
@@ -281,7 +291,27 @@ CONFIG_SCHEMA = cv.All(
             ).extend({
                 cv.Optional("min_value", default=0.0): cv.float_,
                 cv.Optional("max_value", default=5.0): cv.float_,
+                cv.Optional("step", default=0.01): cv.float_,
+            }),
+            cv.Optional(CONF_PI_KD_NUMBER): number.number_schema(
+                SunsterPiKdNumber,
+                unit_of_measurement="",
+                icon="mdi:tune",
+                entity_category="config",
+            ).extend({
+                cv.Optional("min_value", default=0.0): cv.float_,
+                cv.Optional("max_value", default=50.0): cv.float_,
                 cv.Optional("step", default=0.1): cv.float_,
+            }),
+            cv.Optional(CONF_PI_OFF_DELAY_NUMBER): number.number_schema(
+                SunsterPiOffDelayNumber,
+                unit_of_measurement="s",
+                icon="mdi:timer-sand",
+                entity_category="config",
+            ).extend({
+                cv.Optional("min_value", default=0.0): cv.float_,
+                cv.Optional("max_value", default=600.0): cv.float_,
+                cv.Optional("step", default=10.0): cv.float_,
             }),
             cv.Optional(CONF_TARGET_TEMPERATURE_NUMBER): number.number_schema(
                 SunsterTargetTemperatureNumber,
@@ -497,6 +527,14 @@ async def to_code(config):
         cg.add(num.set_sunster_heater(var))
     if CONF_PI_KI_NUMBER in config:
         num_config = config[CONF_PI_KI_NUMBER]
+        num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
+        cg.add(num.set_sunster_heater(var))
+    if CONF_PI_KD_NUMBER in config:
+        num_config = config[CONF_PI_KD_NUMBER]
+        num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
+        cg.add(num.set_sunster_heater(var))
+    if CONF_PI_OFF_DELAY_NUMBER in config:
+        num_config = config[CONF_PI_OFF_DELAY_NUMBER]
         num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
         cg.add(num.set_sunster_heater(var))
     if CONF_TARGET_TEMPERATURE_NUMBER in config:

@@ -69,13 +69,15 @@ struct FuelConsumptionData {
 
 // Config structure for persistence (PI, target temp, hysteresis, injected_per_pulse)
 struct HeaterConfigData {
-  uint32_t version{2};
+  uint32_t version{3};
   float pi_kp;
   float pi_ki;
+  float pi_kd;
   float target_temperature;
   float pi_output_min_off;
   float pi_output_min_on;
   float injected_per_pulse;
+  float pi_off_delay;
 };
 
 class SunsterHeater : public PollingComponent, public uart::UARTDevice {
@@ -100,6 +102,8 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   void set_antifreeze_temp_off(float temp) { antifreeze_temp_off_ = temp; }
   void set_pi_kp(float kp) { pi_kp_ = kp; }
   void set_pi_ki(float ki) { pi_ki_ = ki; }
+  void set_pi_kd(float kd) { pi_kd_ = kd; }
+  void set_pi_off_delay(float delay_s) { pi_off_delay_ = delay_s; }
   void set_pi_output_min_off(float v) { pi_output_min_off_ = v; }
   void set_pi_output_min_on(float v) { pi_output_min_on_ = v; }
 
@@ -107,6 +111,8 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   float get_power_level_percent() const { return power_level_ * 10.0f; }
   float get_pi_kp() const { return pi_kp_; }
   float get_pi_ki() const { return pi_ki_; }
+  float get_pi_kd() const { return pi_kd_; }
+  float get_pi_off_delay() const { return pi_off_delay_; }
   float get_pi_output_min_off() const { return pi_output_min_off_; }
   float get_pi_output_min_on() const { return pi_output_min_on_; }
 
@@ -241,10 +247,14 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   // PI controller (automatic mode)
   float pi_kp_{10.0f};
   float pi_ki_{0.5f};
+  float pi_kd_{0.0f};
+  float pi_off_delay_{60.0f};
   float pi_output_min_off_{3.0f};
   float pi_output_min_on_{15.0f};
   float pi_integral_{0.0f};
+  float last_error_{0.0f};
   uint32_t last_pi_time_{0};
+  uint32_t time_entered_off_region_{0};
   static constexpr float PI_INTEGRAL_MAX = 100.0f;
 
   // Parsed sensor values
@@ -498,6 +508,70 @@ class SunsterPiKiNumber : public number::Number, public Component {
   void control(float value) override {
     if (heater_) {
       heater_->set_pi_ki(value);
+      heater_->save_config_preferences();
+      this->publish_state(value);
+    }
+  }
+  SunsterHeater *heater_{nullptr};
+  uint32_t last_publish_{0};
+};
+
+// Number component for PI Kd (automatic mode)
+class SunsterPiKdNumber : public number::Number, public Component {
+ public:
+  void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
+  float get_setup_priority() const override { return setup_priority::AFTER_CONNECTION; }
+  void setup() override {
+    if (heater_) this->publish_state(heater_->get_pi_kd());
+  }
+  void dump_config() override {
+    LOG_NUMBER("", "Sunster Heater PI Kd", this);
+  }
+ protected:
+  void loop() override {
+    Component::loop();
+    if (!heater_ || millis() >= 120000u) return;
+    uint32_t now = millis();
+    if (last_publish_ == 0u || (now - last_publish_ >= 300u)) {
+      last_publish_ = now;
+      this->publish_state(heater_->get_pi_kd());
+    }
+  }
+  void control(float value) override {
+    if (heater_) {
+      heater_->set_pi_kd(value);
+      heater_->save_config_preferences();
+      this->publish_state(value);
+    }
+  }
+  SunsterHeater *heater_{nullptr};
+  uint32_t last_publish_{0};
+};
+
+// Number component for PI Off Delay (automatic mode)
+class SunsterPiOffDelayNumber : public number::Number, public Component {
+ public:
+  void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
+  float get_setup_priority() const override { return setup_priority::AFTER_CONNECTION; }
+  void setup() override {
+    if (heater_) this->publish_state(heater_->get_pi_off_delay());
+  }
+  void dump_config() override {
+    LOG_NUMBER("", "Sunster Heater PI Off Delay", this);
+  }
+ protected:
+  void loop() override {
+    Component::loop();
+    if (!heater_ || millis() >= 120000u) return;
+    uint32_t now = millis();
+    if (last_publish_ == 0u || (now - last_publish_ >= 300u)) {
+      last_publish_ = now;
+      this->publish_state(heater_->get_pi_off_delay());
+    }
+  }
+  void control(float value) override {
+    if (heater_) {
+      heater_->set_pi_off_delay(value);
       heater_->save_config_preferences();
       this->publish_state(value);
     }

@@ -604,11 +604,11 @@ void SunsterHeater::load_fuel_consumption_data() {
 }
 
 void SunsterHeater::load_config_data() {
-  ESP_LOGI(TAG, "Loading config. Current (YAML) defaults: Kp=%.2f Ki=%.2f Target=%.1f", pi_kp_, pi_ki_, target_temperature_);
+  ESP_LOGI(TAG, "Loading config. Current (YAML) defaults: Kp=%.2f Ki=%.2f Kd=%.2f Target=%.1f", pi_kp_, pi_ki_, pi_kd_, target_temperature_);
   HeaterConfigData data;
   if (pref_config_.load(&data)) {
     ESP_LOGI(TAG, "Preference loaded. Version: %u", data.version);
-    if (data.version == 2) {
+    if (data.version == 3) {
       if (std::isnan(data.pi_kp) || std::isnan(data.pi_ki) || std::isnan(data.target_temperature)) {
          ESP_LOGW(TAG, "Loaded config contains NAN values! forcing defaults.");
          save_config_data();
@@ -616,14 +616,16 @@ void SunsterHeater::load_config_data() {
       }
       pi_kp_ = data.pi_kp;
       pi_ki_ = data.pi_ki;
+      pi_kd_ = data.pi_kd;
       target_temperature_ = data.target_temperature;
       pi_output_min_off_ = data.pi_output_min_off;
       pi_output_min_on_ = data.pi_output_min_on;
       injected_per_pulse_ = data.injected_per_pulse;
-      ESP_LOGI(TAG, "Loaded persisted config: Kp=%.2f Ki=%.2f target=%.1f°C hyst=%.0f/%.0f%% inj=%.3f",
-               pi_kp_, pi_ki_, target_temperature_, pi_output_min_off_, pi_output_min_on_, injected_per_pulse_);
+      pi_off_delay_ = data.pi_off_delay;
+      ESP_LOGI(TAG, "Loaded persisted config: Kp=%.2f Ki=%.2f Kd=%.2f target=%.1f°C hyst=%.0f/%.0f%% inj=%.3f delay=%.0fs",
+               pi_kp_, pi_ki_, pi_kd_, target_temperature_, pi_output_min_off_, pi_output_min_on_, injected_per_pulse_, pi_off_delay_);
     } else {
-      ESP_LOGW(TAG, "Config version mismatch (found %u, expected 2). Using defaults.", data.version);
+      ESP_LOGW(TAG, "Config version mismatch (found %u, expected 3). Using defaults.", data.version);
       save_config_data();
     }
   } else {
@@ -634,13 +636,15 @@ void SunsterHeater::load_config_data() {
 
 void SunsterHeater::save_config_data() {
   HeaterConfigData data;
-  data.version = 2;
+  data.version = 3;
   data.pi_kp = pi_kp_;
   data.pi_ki = pi_ki_;
+  data.pi_kd = pi_kd_;
   data.target_temperature = target_temperature_;
   data.pi_output_min_off = pi_output_min_off_;
   data.pi_output_min_on = pi_output_min_on_;
   data.injected_per_pulse = injected_per_pulse_;
+  data.pi_off_delay = pi_off_delay_;
   if (pref_config_.save(&data)) {
     ESP_LOGD(TAG, "Config preferences saved");
   } else {
@@ -837,7 +841,10 @@ void SunsterHeater::handle_automatic_mode() {
   pi_integral_ += pi_ki_ * error * dt_s;
   pi_integral_ = std::max(-PI_INTEGRAL_MAX, std::min(PI_INTEGRAL_MAX, pi_integral_));
 
-  float output = pi_kp_ * error + pi_integral_;
+  float derivative = (dt_s > 0) ? (error - last_error_) / dt_s : 0.0f;
+  last_error_ = error;
+
+  float output = pi_kp_ * error + pi_integral_ + pi_kd_ * derivative;
   output = std::max(0.0f, std::min(100.0f, output));
 
   // Round to 10% steps (10, 20, 30, ... 100); min 10% when on
@@ -846,7 +853,8 @@ void SunsterHeater::handle_automatic_mode() {
   output_stepped = std::max(0.0f, std::min(100.0f, output_stepped));
   last_pi_output_ = output_stepped;
   if (pi_output_sensor_) {
-    pi_output_sensor_->publish_state(output_stepped);
+    // Show RAW output for better debugging/tuning (0-100%), not the stepped value
+    pi_output_sensor_->publish_state(output);
   }
 
   if (!automatic_master_enabled_) {
@@ -856,18 +864,43 @@ void SunsterHeater::handle_automatic_mode() {
     }
     return;
   }
-  if (output_stepped < pi_output_min_off_) {
+  
+  if (output < pi_output_min_off_) {
+    // Output is below turn-off threshold
     if (heater_enabled_) {
-      turn_off();
+      // Check if we need to start the timer
+      if (time_entered_off_region_ == 0) {
+        time_entered_off_region_ = now;
+        ESP_LOGD(TAG, "PI output %.1f%% < min off %.1f%%. Starting off-timer (wait %.0fs)", 
+                 output, pi_output_min_off_, pi_off_delay_);
+      } else {
+        // Timer already running, check if duration exceeded
+        float elapsed_s = (now - time_entered_off_region_) / 1000.0f;
+        if (elapsed_s >= pi_off_delay_) {
+          ESP_LOGI(TAG, "PI output below threshold for %.1fs. Turning off.", elapsed_s);
+          turn_off();
+          time_entered_off_region_ = 0; // Reset timer
+        }
+      }
+    } else {
+      // Already off, just ensure timer is reset
+      time_entered_off_region_ = 0;
     }
-  } else if (output_stepped >= pi_output_min_on_) {
-    if (!heater_enabled_) {
-      turn_on();
-    }
-    set_power_level_percent(output_stepped);
   } else {
-    if (heater_enabled_) {
-      set_power_level_percent(pi_output_min_on_);
+    // Output is above turn-off threshold
+    time_entered_off_region_ = 0; // Reset off-timer if we recover
+
+    if (output_stepped >= pi_output_min_on_) {
+      if (!heater_enabled_) {
+        turn_on();
+      }
+      set_power_level_percent(output_stepped);
+    } else {
+      // In hysteresis region (between min_off and min_on)
+      if (heater_enabled_) {
+        // Keep running at minimum power if we are already on but below min_on
+        set_power_level_percent(pi_output_min_on_);
+      }
     }
   }
 }
