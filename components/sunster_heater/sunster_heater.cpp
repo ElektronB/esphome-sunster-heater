@@ -781,15 +781,20 @@ void SunsterHeater::handle_automatic_mode() {
   float output = pi_kp_ * error + pi_integral_;
   output = std::max(0.0f, std::min(100.0f, output));
 
-  if (output < pi_output_min_off_) {
+  // Round to 10% steps (10, 20, 30, ... 100); min 10% when on
+  float output_stepped = (output < 10.0f) ? 0.0f
+                        : static_cast<float>((static_cast<int>(output / 10.0f + 0.5f)) * 10);
+  output_stepped = std::max(0.0f, std::min(100.0f, output_stepped));
+
+  if (output_stepped < pi_output_min_off_) {
     if (heater_enabled_) {
       turn_off();
     }
-  } else if (output >= pi_output_min_on_) {
+  } else if (output_stepped >= pi_output_min_on_) {
     if (!heater_enabled_) {
       turn_on();
     }
-    set_power_level_percent(output);
+    set_power_level_percent(output_stepped);
   } else {
     if (heater_enabled_) {
       set_power_level_percent(pi_output_min_on_);

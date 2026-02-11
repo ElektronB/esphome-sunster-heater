@@ -92,6 +92,12 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   void set_pi_output_min_off(float v) { pi_output_min_off_ = v; }
   void set_pi_output_min_on(float v) { pi_output_min_on_ = v; }
 
+  float get_target_temperature() const { return target_temperature_; }
+  float get_pi_kp() const { return pi_kp_; }
+  float get_pi_ki() const { return pi_ki_; }
+  float get_pi_output_min_off() const { return pi_output_min_off_; }
+  float get_pi_output_min_on() const { return pi_output_min_on_; }
+
   // Time component setter
   void set_time_component(time::RealTimeClock *time) { time_component_ = time; }
 
@@ -375,6 +381,76 @@ class SunsterHeaterPowerLevelNumber : public number::Number, public Component {
     }
   }
 
+  SunsterHeater *heater_{nullptr};
+};
+
+// Number component for PI Kp (automatic mode)
+class SunsterPiKpNumber : public number::Number, public Component {
+ public:
+  void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
+  void setup() override {
+    if (heater_) this->publish_state(heater_->get_pi_kp());
+  }
+ protected:
+  void control(float value) override {
+    if (heater_) { heater_->set_pi_kp(value); this->publish_state(value); }
+  }
+  SunsterHeater *heater_{nullptr};
+};
+
+// Number component for PI Ki (automatic mode)
+class SunsterPiKiNumber : public number::Number, public Component {
+ public:
+  void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
+  void setup() override {
+    if (heater_) this->publish_state(heater_->get_pi_ki());
+  }
+ protected:
+  void control(float value) override {
+    if (heater_) { heater_->set_pi_ki(value); this->publish_state(value); }
+  }
+  SunsterHeater *heater_{nullptr};
+};
+
+// Number component for target temperature (automatic mode)
+class SunsterTargetTemperatureNumber : public number::Number, public Component {
+ public:
+  void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
+  void setup() override {
+    if (heater_) this->publish_state(heater_->get_target_temperature());
+  }
+ protected:
+  void control(float value) override {
+    if (heater_) { heater_->set_target_temperature(value); this->publish_state(value); }
+  }
+  SunsterHeater *heater_{nullptr};
+};
+
+// Number component for PI output min off = hysteresis lower (automatic mode)
+class SunsterPiOutputMinOffNumber : public number::Number, public Component {
+ public:
+  void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
+  void setup() override {
+    if (heater_) this->publish_state(heater_->get_pi_output_min_off());
+  }
+ protected:
+  void control(float value) override {
+    if (heater_) { heater_->set_pi_output_min_off(value); this->publish_state(value); }
+  }
+  SunsterHeater *heater_{nullptr};
+};
+
+// Number component for PI output min on = hysteresis upper (automatic mode)
+class SunsterPiOutputMinOnNumber : public number::Number, public Component {
+ public:
+  void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
+  void setup() override {
+    if (heater_) this->publish_state(heater_->get_pi_output_min_on());
+  }
+ protected:
+  void control(float value) override {
+    if (heater_) { heater_->set_pi_output_min_on(value); this->publish_state(value); }
+  }
   SunsterHeater *heater_{nullptr};
 };
 
