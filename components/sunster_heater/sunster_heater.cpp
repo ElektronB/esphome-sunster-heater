@@ -51,6 +51,10 @@ void SunsterHeater::setup() {
   // Setup persistent storage for fuel consumption
   this->pref_fuel_consumption_ = global_preferences->make_preference<FuelConsumptionData>(fnv1_hash("fuel_consumption"));
   load_fuel_consumption_data();
+
+  // Load persisted config (PI, target temp, hysteresis, injected_per_pulse)
+  this->pref_config_ = global_preferences->make_preference<HeaterConfigData>(fnv1_hash("heater_config"));
+  load_config_data();
   
   // Initialize hourly consumption sensor with initial value
   if (hourly_consumption_sensor_) {
@@ -88,6 +92,9 @@ void SunsterHeater::update() {
   // Handle automatic mode (PI controller)
   if (control_mode_ == ControlMode::AUTOMATIC) {
     handle_automatic_mode();
+  } else if (pi_output_sensor_) {
+    last_pi_output_ = 0.0f;
+    pi_output_sensor_->publish_state(0.0f);
   }
   // Handle antifreeze mode logic
   if (control_mode_ == ControlMode::ANTIFREEZE) {
@@ -595,6 +602,43 @@ void SunsterHeater::load_fuel_consumption_data() {
   }
 }
 
+void SunsterHeater::load_config_data() {
+  HeaterConfigData data;
+  if (pref_config_.load(&data) && data.version == 1) {
+    pi_kp_ = data.pi_kp;
+    pi_ki_ = data.pi_ki;
+    target_temperature_ = data.target_temperature;
+    pi_output_min_off_ = data.pi_output_min_off;
+    pi_output_min_on_ = data.pi_output_min_on;
+    injected_per_pulse_ = data.injected_per_pulse;
+    ESP_LOGI(TAG, "Loaded persisted config: Kp=%.2f Ki=%.2f target=%.1f°C hyst=%.0f/%.0f%% inj=%.3f",
+             pi_kp_, pi_ki_, target_temperature_, pi_output_min_off_, pi_output_min_on_, injected_per_pulse_);
+  } else {
+    ESP_LOGI(TAG, "No persisted config found, using YAML defaults");
+    save_config_data();
+  }
+}
+
+void SunsterHeater::save_config_data() {
+  HeaterConfigData data;
+  data.version = 1;
+  data.pi_kp = pi_kp_;
+  data.pi_ki = pi_ki_;
+  data.target_temperature = target_temperature_;
+  data.pi_output_min_off = pi_output_min_off_;
+  data.pi_output_min_on = pi_output_min_on_;
+  data.injected_per_pulse = injected_per_pulse_;
+  if (pref_config_.save(&data)) {
+    ESP_LOGD(TAG, "Config preferences saved");
+  } else {
+    ESP_LOGW(TAG, "Failed to save config preferences");
+  }
+}
+
+void SunsterHeater::save_config_preferences() {
+  save_config_data();
+}
+
 void SunsterHeater::reset_daily_consumption() {
   ESP_LOGI(TAG, "Manual reset of daily consumption counter");
   daily_consumption_ml_ = 0.0f;
@@ -765,6 +809,8 @@ void SunsterHeater::handle_automatic_mode() {
     if (heater_enabled_) {
       turn_off();
     }
+    last_pi_output_ = 0.0f;
+    if (pi_output_sensor_) pi_output_sensor_->publish_state(0.0f);
     return;
   }
   uint32_t now = millis();
@@ -785,6 +831,10 @@ void SunsterHeater::handle_automatic_mode() {
   float output_stepped = (output < 10.0f) ? 0.0f
                         : static_cast<float>((static_cast<int>(output / 10.0f + 0.5f)) * 10);
   output_stepped = std::max(0.0f, std::min(100.0f, output_stepped));
+  last_pi_output_ = output_stepped;
+  if (pi_output_sensor_) {
+    pi_output_sensor_->publish_state(output_stepped);
+  }
 
   if (output_stepped < pi_output_min_off_) {
     if (heater_enabled_) {

@@ -80,6 +80,7 @@ CONF_HOURLY_CONSUMPTION = "hourly_consumption"
 CONF_DAILY_CONSUMPTION = "daily_consumption"
 CONF_TOTAL_CONSUMPTION = "total_consumption"
 CONF_LOW_VOLTAGE_ERROR = "low_voltage_error"
+CONF_PI_OUTPUT = "pi_output"
 
 # Fuel consumption constants
 UNIT_MILLILITERS = "ml"
@@ -131,6 +132,12 @@ SENSOR_SCHEMAS = {
     ),
     CONF_COOLING_DOWN: binary_sensor.binary_sensor_schema(
         icon=ICON_FAN,
+    ),
+    CONF_PI_OUTPUT: sensor.sensor_schema(
+        unit_of_measurement=UNIT_PERCENT,
+        state_class=STATE_CLASS_MEASUREMENT,
+        accuracy_decimals=0,
+        icon=ICON_POWER,
     ),
     CONF_LOW_VOLTAGE_ERROR: binary_sensor.binary_sensor_schema(
         icon="mdi:alert-circle",
@@ -379,6 +386,7 @@ async def to_code(config):
             (CONF_HOURLY_CONSUMPTION, "set_hourly_consumption_sensor"),
             (CONF_DAILY_CONSUMPTION, "set_daily_consumption_sensor"),
             (CONF_TOTAL_CONSUMPTION, "set_total_consumption_sensor"),
+            (CONF_PI_OUTPUT, "set_pi_output_sensor"),
         ]
 
         text_sensors_to_create = [
@@ -439,6 +447,7 @@ async def to_code(config):
             (CONF_HOURLY_CONSUMPTION, "set_hourly_consumption_sensor", sensor.new_sensor),
             (CONF_DAILY_CONSUMPTION, "set_daily_consumption_sensor", sensor.new_sensor),
             (CONF_TOTAL_CONSUMPTION, "set_total_consumption_sensor", sensor.new_sensor),
+            (CONF_PI_OUTPUT, "set_pi_output_sensor", sensor.new_sensor),
             (CONF_STATE, "set_state_sensor", text_sensor.new_text_sensor),
             (CONF_GLOW_PLUG_STATUS, "set_glow_plug_status_sensor", text_sensor.new_text_sensor),
             (CONF_LOW_VOLTAGE_ERROR, "set_low_voltage_error_sensor", binary_sensor.new_binary_sensor),

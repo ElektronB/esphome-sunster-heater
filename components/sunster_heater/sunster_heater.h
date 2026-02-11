@@ -67,6 +67,17 @@ struct FuelConsumptionData {
   float total_pulses;  // Keep as float to avoid precision loss
 };
 
+// Config structure for persistence (PI, target temp, hysteresis, injected_per_pulse)
+struct HeaterConfigData {
+  uint32_t version{1};
+  float pi_kp;
+  float pi_ki;
+  float target_temperature;
+  float pi_output_min_off;
+  float pi_output_min_on;
+  float injected_per_pulse;
+};
+
 class SunsterHeater : public PollingComponent, public uart::UARTDevice {
  public:
   // Configuration methods
@@ -98,6 +109,8 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   float get_pi_output_min_off() const { return pi_output_min_off_; }
   float get_pi_output_min_on() const { return pi_output_min_on_; }
 
+  void save_config_preferences();
+
   // Time component setter
   void set_time_component(time::RealTimeClock *time) { time_component_ = time; }
 
@@ -121,6 +134,7 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   void set_daily_consumption_sensor(sensor::Sensor *sensor) { daily_consumption_sensor_ = sensor; }
   void set_total_consumption_sensor(sensor::Sensor *sensor) { total_consumption_sensor_ = sensor; }
   void set_low_voltage_error_sensor(binary_sensor::BinarySensor *sensor) { low_voltage_error_sensor_ = sensor; }
+  void set_pi_output_sensor(sensor::Sensor *sensor) { pi_output_sensor_ = sensor; }
 
   // Control methods
   void turn_on();
@@ -188,6 +202,8 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   void update_fuel_consumption(float pump_frequency);
   void save_fuel_consumption_data();
   void load_fuel_consumption_data();
+  void load_config_data();
+  void save_config_data();
   void check_daily_reset();
   uint32_t get_days_since_epoch();
 
@@ -246,6 +262,7 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   float total_fuel_pulses_{0.0};
   float total_consumption_ml_{0.0};
   ESPPreferenceObject pref_fuel_consumption_;
+  ESPPreferenceObject pref_config_;
 
   time::RealTimeClock *time_component_{nullptr};
   bool time_sync_warning_shown_{false};
@@ -264,7 +281,9 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   sensor::Sensor *daily_consumption_sensor_{nullptr};
   sensor::Sensor *total_consumption_sensor_{nullptr};
   binary_sensor::BinarySensor *low_voltage_error_sensor_{nullptr};
+  sensor::Sensor *pi_output_sensor_{nullptr};
   number::Number *injected_per_pulse_number_{nullptr};
+  float last_pi_output_{0.0f};
 };
 
 // Number component for injected per pulse configuration
@@ -273,21 +292,29 @@ class SunsterInjectedPerPulseNumber : public number::Number, public Component {
   void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
 
   void setup() override {
-    if (heater_) {
-      float value = heater_->get_injected_per_pulse();
-      this->publish_state(value);
-    }
+    if (heater_) this->publish_state(heater_->get_injected_per_pulse());
   }
 
  protected:
+  void loop() override {
+    Component::loop();
+    if (!heater_) return;
+    uint32_t now = millis();
+    if (now < 30000u && now - last_publish_ >= 2000u) {
+      last_publish_ = now;
+      this->publish_state(heater_->get_injected_per_pulse());
+    }
+  }
   void control(float value) override {
     if (heater_) {
       heater_->set_injected_per_pulse(value);
+      heater_->save_config_preferences();
       this->publish_state(value);
     }
   }
 
   SunsterHeater *heater_{nullptr};
+  uint32_t last_publish_{0};
 };
 
 // Button component for resetting total consumption
@@ -392,10 +419,23 @@ class SunsterPiKpNumber : public number::Number, public Component {
     if (heater_) this->publish_state(heater_->get_pi_kp());
   }
  protected:
+  void loop() override {
+    Component::loop();
+    if (!heater_ || millis() >= 30000u) return;
+    if (millis() - last_publish_ >= 2000u) {
+      last_publish_ = millis();
+      this->publish_state(heater_->get_pi_kp());
+    }
+  }
   void control(float value) override {
-    if (heater_) { heater_->set_pi_kp(value); this->publish_state(value); }
+    if (heater_) {
+      heater_->set_pi_kp(value);
+      heater_->save_config_preferences();
+      this->publish_state(value);
+    }
   }
   SunsterHeater *heater_{nullptr};
+  uint32_t last_publish_{0};
 };
 
 // Number component for PI Ki (automatic mode)
@@ -406,10 +446,23 @@ class SunsterPiKiNumber : public number::Number, public Component {
     if (heater_) this->publish_state(heater_->get_pi_ki());
   }
  protected:
+  void loop() override {
+    Component::loop();
+    if (!heater_ || millis() >= 30000u) return;
+    if (millis() - last_publish_ >= 2000u) {
+      last_publish_ = millis();
+      this->publish_state(heater_->get_pi_ki());
+    }
+  }
   void control(float value) override {
-    if (heater_) { heater_->set_pi_ki(value); this->publish_state(value); }
+    if (heater_) {
+      heater_->set_pi_ki(value);
+      heater_->save_config_preferences();
+      this->publish_state(value);
+    }
   }
   SunsterHeater *heater_{nullptr};
+  uint32_t last_publish_{0};
 };
 
 // Number component for target temperature (automatic mode)
@@ -420,10 +473,23 @@ class SunsterTargetTemperatureNumber : public number::Number, public Component {
     if (heater_) this->publish_state(heater_->get_target_temperature());
   }
  protected:
+  void loop() override {
+    Component::loop();
+    if (!heater_ || millis() >= 30000u) return;
+    if (millis() - last_publish_ >= 2000u) {
+      last_publish_ = millis();
+      this->publish_state(heater_->get_target_temperature());
+    }
+  }
   void control(float value) override {
-    if (heater_) { heater_->set_target_temperature(value); this->publish_state(value); }
+    if (heater_) {
+      heater_->set_target_temperature(value);
+      heater_->save_config_preferences();
+      this->publish_state(value);
+    }
   }
   SunsterHeater *heater_{nullptr};
+  uint32_t last_publish_{0};
 };
 
 // Number component for PI output min off = hysteresis lower (automatic mode)
@@ -434,10 +500,23 @@ class SunsterPiOutputMinOffNumber : public number::Number, public Component {
     if (heater_) this->publish_state(heater_->get_pi_output_min_off());
   }
  protected:
+  void loop() override {
+    Component::loop();
+    if (!heater_ || millis() >= 30000u) return;
+    if (millis() - last_publish_ >= 2000u) {
+      last_publish_ = millis();
+      this->publish_state(heater_->get_pi_output_min_off());
+    }
+  }
   void control(float value) override {
-    if (heater_) { heater_->set_pi_output_min_off(value); this->publish_state(value); }
+    if (heater_) {
+      heater_->set_pi_output_min_off(value);
+      heater_->save_config_preferences();
+      this->publish_state(value);
+    }
   }
   SunsterHeater *heater_{nullptr};
+  uint32_t last_publish_{0};
 };
 
 // Number component for PI output min on = hysteresis upper (automatic mode)
@@ -448,10 +527,23 @@ class SunsterPiOutputMinOnNumber : public number::Number, public Component {
     if (heater_) this->publish_state(heater_->get_pi_output_min_on());
   }
  protected:
+  void loop() override {
+    Component::loop();
+    if (!heater_ || millis() >= 30000u) return;
+    if (millis() - last_publish_ >= 2000u) {
+      last_publish_ = millis();
+      this->publish_state(heater_->get_pi_output_min_on());
+    }
+  }
   void control(float value) override {
-    if (heater_) { heater_->set_pi_output_min_on(value); this->publish_state(value); }
+    if (heater_) {
+      heater_->set_pi_output_min_on(value);
+      heater_->save_config_preferences();
+      this->publish_state(value);
+    }
   }
   SunsterHeater *heater_{nullptr};
+  uint32_t last_publish_{0};
 };
 
 // Select component for control mode
