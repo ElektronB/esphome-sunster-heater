@@ -412,16 +412,53 @@ sunster_heater:
   
   # Optional control components
   control_mode_select:
-    name: "Control Mode"           # Manual/Antifreeze selector
+    name: "Heizung Modus"          # Manual/Automatic/Antifreeze selector
   power_switch:
-    name: "Power"                  # On/off control (manual mode only)
+    name: "Heizung Ein-Aus"        # Master on/off (in Automatic: PI won't turn on when OFF)
   power_level_number:
-    name: "Power Level"            # 10-100% control (manual mode only)
+    name: "Heizung Leistung"      # 10-100% (Manual mode)
+  target_temperature_number:
+    name: "Heizung Solltemperatur" # Target temp (Automatic mode)
   reset_total_consumption_button:
     name: "Reset Total Consumption"
 ```
 
-**Note:** Power switch and power level only function in Manual mode. In Antifreeze mode, these controls are disabled.
+**Power switch (Ein-Aus):** In Automatic mode, the power switch acts as a master enable: when OFF, the PI controller will not turn the heater on. You must switch ON to allow automatic control.
+
+**Modusabhängige Steuerung:** Show Power Level (Manual) or Solltemperatur (Automatic) in your Home Assistant dashboard using conditional cards:
+
+```yaml
+# Lovelace – modusabhängige Steuerelemente
+# Passe die entity_ids an deine Installation an (van-heizung = Gerätename)
+type: vertical-stack
+cards:
+  - type: entities
+    entities:
+      - entity: select.van_heizung_heizung_modus
+        name: Modus
+      - entity: switch.van_heizung_heizung_ein_aus
+        name: Ein/Aus
+  - type: conditional
+    conditions:
+      - condition: state
+        entity: select.van_heizung_heizung_modus
+        state: "Manual"
+    card:
+      type: entities
+      entities:
+        - entity: number.van_heizung_heizung_leistung
+          name: Leistung %
+  - type: conditional
+    conditions:
+      - condition: state
+        entity: select.van_heizung_heizung_modus
+        state: "Automatic"
+    card:
+      type: entities
+      entities:
+        - entity: number.van_heizung_heizung_solltemperatur
+          name: Solltemperatur °C
+```
 
 ### Low Voltage Protection
 

@@ -104,6 +104,7 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   void set_pi_output_min_on(float v) { pi_output_min_on_ = v; }
 
   float get_target_temperature() const { return target_temperature_; }
+  float get_power_level_percent() const { return power_level_ * 10.0f; }
   float get_pi_kp() const { return pi_kp_; }
   float get_pi_ki() const { return pi_ki_; }
   float get_pi_output_min_off() const { return pi_output_min_off_; }
@@ -165,6 +166,8 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   bool has_low_voltage_error() const { return low_voltage_error_; }
   bool get_heater_enabled() const { return heater_enabled_; }
   bool is_state_synced_once() const { return heater_state_synced_once_; }
+  void set_automatic_master_enabled(bool en) { automatic_master_enabled_ = en; }
+  bool is_automatic_master_enabled() const { return automatic_master_enabled_; }
 
   // Fuel consumption getters
   float get_daily_consumption() const { return daily_consumption_ml_; }
@@ -218,6 +221,7 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
 
   // Control state
   bool heater_enabled_{false};
+  bool automatic_master_enabled_{true};  // Power switch: when false, automatic mode won't turn on
   uint8_t power_level_{8};  // 1-10 scale, default 80%
   float target_temperature_{20.0};
   HeaterState current_state_{HeaterState::OFF};
@@ -366,6 +370,7 @@ class SunsterHeaterPowerSwitch : public switch_::Switch, public Component {
   }
   void write_state(bool state) override {
     if (heater_) {
+      heater_->set_automatic_master_enabled(state);
       if (state) {
         heater_->turn_on();
       } else {
@@ -393,11 +398,20 @@ class SunsterHeaterPowerLevelNumber : public number::Number, public Component {
 
   void setup() override {
     if (heater_) {
-      this->publish_state(80.0f);
+      this->publish_state(heater_->get_power_level_percent());
     }
   }
 
  protected:
+  void loop() override {
+    Component::loop();
+    if (!heater_ || millis() >= 60000u) return;
+    uint32_t now = millis();
+    if (last_publish_ == 0u || (now - last_publish_ >= 1000u)) {
+      last_publish_ = now;
+      this->publish_state(heater_->get_power_level_percent());
+    }
+  }
   void control(float value) override {
     if (heater_) {
       if (!heater_->is_manual_mode()) {
@@ -410,6 +424,7 @@ class SunsterHeaterPowerLevelNumber : public number::Number, public Component {
   }
 
   SunsterHeater *heater_{nullptr};
+  uint32_t last_publish_{0};
 };
 
 // Number component for PI Kp (automatic mode)

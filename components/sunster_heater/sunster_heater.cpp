@@ -38,7 +38,7 @@ void SunsterHeater::setup() {
   this->current_state_ = HeaterState::OFF;
   this->heater_enabled_ = false;
   this->antifreeze_active_ = false;
-  this->control_mode_ = ControlMode::MANUAL;  // Default after boot: manual, so start works; switch via "Heizung Modus" if needed
+  // control_mode_ from YAML (set_control_mode) is kept; do not overwrite
   this->power_level_ = static_cast<uint8_t>(default_power_percent_ / 10.0f);  // Convert % to 1-10 scale
   this->last_send_time_ = millis();
   this->last_received_time_ = millis();
@@ -354,7 +354,8 @@ void SunsterHeater::process_heater_frame(const std::vector<uint8_t> &frame) {
     if (!heater_state_synced_once_) {
       heater_state_synced_once_ = true;
       heater_enabled_ = (current_state_ != HeaterState::OFF && current_state_ != HeaterState::STOPPING_COOLING);
-      ESP_LOGD(TAG, "Initial sync: enabled=%s (heater state %s)", YESNO(heater_enabled_), state_to_string(current_state_));
+      automatic_master_enabled_ = heater_enabled_;
+      ESP_LOGD(TAG, "Initial sync: enabled=%s master=%s (heater state %s)", YESNO(heater_enabled_), YESNO(automatic_master_enabled_), state_to_string(current_state_));
     }
     // After that, only sync enabled -> false when heater has actually stopped (so UI "off" is not overwritten)
     else if ((current_state_ == HeaterState::OFF || current_state_ == HeaterState::STOPPING_COOLING) && heater_enabled_) {
@@ -836,6 +837,13 @@ void SunsterHeater::handle_automatic_mode() {
     pi_output_sensor_->publish_state(output_stepped);
   }
 
+  if (!automatic_master_enabled_) {
+    // Power switch (van_heizung_heizung_ein_aus) is OFF – PI must not turn on
+    if (heater_enabled_) {
+      turn_off();
+    }
+    return;
+  }
   if (output_stepped < pi_output_min_off_) {
     if (heater_enabled_) {
       turn_off();
