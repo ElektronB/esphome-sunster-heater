@@ -300,7 +300,8 @@ class SunsterInjectedPerPulseNumber : public number::Number, public Component {
     Component::loop();
     if (!heater_) return;
     uint32_t now = millis();
-    if (now < 30000u && now - last_publish_ >= 2000u) {
+    if (now >= 60000u) return;
+    if (last_publish_ == 0u || (now - last_publish_ >= 1000u)) {
       last_publish_ = now;
       this->publish_state(heater_->get_injected_per_pulse());
     }
@@ -421,9 +422,10 @@ class SunsterPiKpNumber : public number::Number, public Component {
  protected:
   void loop() override {
     Component::loop();
-    if (!heater_ || millis() >= 30000u) return;
-    if (millis() - last_publish_ >= 2000u) {
-      last_publish_ = millis();
+    if (!heater_ || millis() >= 60000u) return;
+    uint32_t now = millis();
+    if (last_publish_ == 0u || (now - last_publish_ >= 1000u)) {
+      last_publish_ = now;
       this->publish_state(heater_->get_pi_kp());
     }
   }
@@ -448,9 +450,10 @@ class SunsterPiKiNumber : public number::Number, public Component {
  protected:
   void loop() override {
     Component::loop();
-    if (!heater_ || millis() >= 30000u) return;
-    if (millis() - last_publish_ >= 2000u) {
-      last_publish_ = millis();
+    if (!heater_ || millis() >= 60000u) return;
+    uint32_t now = millis();
+    if (last_publish_ == 0u || (now - last_publish_ >= 1000u)) {
+      last_publish_ = now;
       this->publish_state(heater_->get_pi_ki());
     }
   }
@@ -475,9 +478,10 @@ class SunsterTargetTemperatureNumber : public number::Number, public Component {
  protected:
   void loop() override {
     Component::loop();
-    if (!heater_ || millis() >= 30000u) return;
-    if (millis() - last_publish_ >= 2000u) {
-      last_publish_ = millis();
+    if (!heater_ || millis() >= 60000u) return;
+    uint32_t now = millis();
+    if (last_publish_ == 0u || (now - last_publish_ >= 1000u)) {
+      last_publish_ = now;
       this->publish_state(heater_->get_target_temperature());
     }
   }
@@ -502,9 +506,10 @@ class SunsterPiOutputMinOffNumber : public number::Number, public Component {
  protected:
   void loop() override {
     Component::loop();
-    if (!heater_ || millis() >= 30000u) return;
-    if (millis() - last_publish_ >= 2000u) {
-      last_publish_ = millis();
+    if (!heater_ || millis() >= 60000u) return;
+    uint32_t now = millis();
+    if (last_publish_ == 0u || (now - last_publish_ >= 1000u)) {
+      last_publish_ = now;
       this->publish_state(heater_->get_pi_output_min_off());
     }
   }
@@ -529,9 +534,10 @@ class SunsterPiOutputMinOnNumber : public number::Number, public Component {
  protected:
   void loop() override {
     Component::loop();
-    if (!heater_ || millis() >= 30000u) return;
-    if (millis() - last_publish_ >= 2000u) {
-      last_publish_ = millis();
+    if (!heater_ || millis() >= 60000u) return;
+    uint32_t now = millis();
+    if (last_publish_ == 0u || (now - last_publish_ >= 1000u)) {
+      last_publish_ = now;
       this->publish_state(heater_->get_pi_output_min_on());
     }
   }
@@ -572,7 +578,8 @@ class SunsterControlModeSelect : public select::Select, public Component {
     Component::loop();
     if (!heater_) return;
     uint32_t now = millis();
-    if (now < 30000u && (now - last_mode_publish_) >= 2000u) {
+    if (now >= 60000u) return;
+    if (last_mode_publish_ == 0u || (now - last_mode_publish_ >= 1000u)) {
       last_mode_publish_ = now;
       publish_mode_state_();
     }
