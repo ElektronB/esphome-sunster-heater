@@ -294,6 +294,7 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
 class SunsterInjectedPerPulseNumber : public number::Number, public Component {
  public:
   void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
+  float get_setup_priority() const override { return setup_priority::AFTER_CONNECTION; }
 
   void setup() override {
     if (heater_) this->publish_state(heater_->get_injected_per_pulse());
@@ -304,8 +305,8 @@ class SunsterInjectedPerPulseNumber : public number::Number, public Component {
     Component::loop();
     if (!heater_) return;
     uint32_t now = millis();
-    if (now >= 60000u) return;
-    if (last_publish_ == 0u || (now - last_publish_ >= 1000u)) {
+    if (now >= 120000u) return;
+    if (last_publish_ == 0u || (now - last_publish_ >= 300u)) {
       last_publish_ = now;
       this->publish_state(heater_->get_injected_per_pulse());
     }
@@ -395,6 +396,7 @@ class SunsterHeaterPowerSwitch : public switch_::Switch, public Component {
 class SunsterHeaterPowerLevelNumber : public number::Number, public Component {
  public:
   void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
+  float get_setup_priority() const override { return setup_priority::AFTER_CONNECTION; }
 
   void setup() override {
     if (heater_) {
@@ -405,9 +407,9 @@ class SunsterHeaterPowerLevelNumber : public number::Number, public Component {
  protected:
   void loop() override {
     Component::loop();
-    if (!heater_ || millis() >= 60000u) return;
+    if (!heater_ || millis() >= 120000u) return;
     uint32_t now = millis();
-    if (last_publish_ == 0u || (now - last_publish_ >= 1000u)) {
+    if (last_publish_ == 0u || (now - last_publish_ >= 300u)) {
       last_publish_ = now;
       this->publish_state(heater_->get_power_level_percent());
     }
@@ -431,15 +433,16 @@ class SunsterHeaterPowerLevelNumber : public number::Number, public Component {
 class SunsterPiKpNumber : public number::Number, public Component {
  public:
   void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
+  float get_setup_priority() const override { return setup_priority::AFTER_CONNECTION; }
   void setup() override {
     if (heater_) this->publish_state(heater_->get_pi_kp());
   }
  protected:
   void loop() override {
     Component::loop();
-    if (!heater_ || millis() >= 60000u) return;
+    if (!heater_ || millis() >= 120000u) return;
     uint32_t now = millis();
-    if (last_publish_ == 0u || (now - last_publish_ >= 1000u)) {
+    if (last_publish_ == 0u || (now - last_publish_ >= 300u)) {
       last_publish_ = now;
       this->publish_state(heater_->get_pi_kp());
     }
@@ -459,15 +462,16 @@ class SunsterPiKpNumber : public number::Number, public Component {
 class SunsterPiKiNumber : public number::Number, public Component {
  public:
   void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
+  float get_setup_priority() const override { return setup_priority::AFTER_CONNECTION; }
   void setup() override {
     if (heater_) this->publish_state(heater_->get_pi_ki());
   }
  protected:
   void loop() override {
     Component::loop();
-    if (!heater_ || millis() >= 60000u) return;
+    if (!heater_ || millis() >= 120000u) return;
     uint32_t now = millis();
-    if (last_publish_ == 0u || (now - last_publish_ >= 1000u)) {
+    if (last_publish_ == 0u || (now - last_publish_ >= 300u)) {
       last_publish_ = now;
       this->publish_state(heater_->get_pi_ki());
     }
@@ -487,15 +491,16 @@ class SunsterPiKiNumber : public number::Number, public Component {
 class SunsterTargetTemperatureNumber : public number::Number, public Component {
  public:
   void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
+  float get_setup_priority() const override { return setup_priority::AFTER_CONNECTION; }
   void setup() override {
     if (heater_) this->publish_state(heater_->get_target_temperature());
   }
  protected:
   void loop() override {
     Component::loop();
-    if (!heater_ || millis() >= 60000u) return;
+    if (!heater_ || millis() >= 120000u) return;
     uint32_t now = millis();
-    if (last_publish_ == 0u || (now - last_publish_ >= 1000u)) {
+    if (last_publish_ == 0u || (now - last_publish_ >= 300u)) {
       last_publish_ = now;
       this->publish_state(heater_->get_target_temperature());
     }
@@ -515,15 +520,16 @@ class SunsterTargetTemperatureNumber : public number::Number, public Component {
 class SunsterPiOutputMinOffNumber : public number::Number, public Component {
  public:
   void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
+  float get_setup_priority() const override { return setup_priority::AFTER_CONNECTION; }
   void setup() override {
     if (heater_) this->publish_state(heater_->get_pi_output_min_off());
   }
  protected:
   void loop() override {
     Component::loop();
-    if (!heater_ || millis() >= 60000u) return;
+    if (!heater_ || millis() >= 120000u) return;
     uint32_t now = millis();
-    if (last_publish_ == 0u || (now - last_publish_ >= 1000u)) {
+    if (last_publish_ == 0u || (now - last_publish_ >= 300u)) {
       last_publish_ = now;
       this->publish_state(heater_->get_pi_output_min_off());
     }
@@ -543,15 +549,16 @@ class SunsterPiOutputMinOffNumber : public number::Number, public Component {
 class SunsterPiOutputMinOnNumber : public number::Number, public Component {
  public:
   void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
+  float get_setup_priority() const override { return setup_priority::AFTER_CONNECTION; }
   void setup() override {
     if (heater_) this->publish_state(heater_->get_pi_output_min_on());
   }
  protected:
   void loop() override {
     Component::loop();
-    if (!heater_ || millis() >= 60000u) return;
+    if (!heater_ || millis() >= 120000u) return;
     uint32_t now = millis();
-    if (last_publish_ == 0u || (now - last_publish_ >= 1000u)) {
+    if (last_publish_ == 0u || (now - last_publish_ >= 300u)) {
       last_publish_ = now;
       this->publish_state(heater_->get_pi_output_min_on());
     }
@@ -571,6 +578,7 @@ class SunsterPiOutputMinOnNumber : public number::Number, public Component {
 class SunsterControlModeSelect : public select::Select, public Component {
  public:
   void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
+  float get_setup_priority() const override { return setup_priority::AFTER_CONNECTION; }
 
   void setup() override {
     publish_mode_state_();
@@ -593,8 +601,8 @@ class SunsterControlModeSelect : public select::Select, public Component {
     Component::loop();
     if (!heater_) return;
     uint32_t now = millis();
-    if (now >= 60000u) return;
-    if (last_mode_publish_ == 0u || (now - last_mode_publish_ >= 1000u)) {
+    if (now >= 120000u) return;
+    if (last_mode_publish_ == 0u || (now - last_mode_publish_ >= 300u)) {
       last_mode_publish_ = now;
       publish_mode_state_();
     }

@@ -257,6 +257,7 @@ CONFIG_SCHEMA = cv.All(
                 SunsterHeaterPowerLevelNumber,
                 unit_of_measurement=UNIT_PERCENT,
                 icon="mdi:percent",
+                entity_category="config",
             ).extend({
                 cv.Optional("min_value", default=10.0): cv.float_,
                 cv.Optional("max_value", default=100.0): cv.float_,
