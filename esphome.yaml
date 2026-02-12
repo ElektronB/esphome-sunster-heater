@@ -7,14 +7,10 @@ esp32:
   framework:
     type: esp-idf
 
-# external_components:
-#   - source: github://ElektronB/esphome-sunster-heater@main
-#     components: [sunster_heater]
-#     refresh: 0s  # Einmalig: Cache neu laden, danach z.B. 1d
-
 external_components:
-  - source: components
+  - source: github://ElektronB/esphome-sunster-heater@main
     components: [sunster_heater]
+    refresh: 0s  # Einmalig: Cache neu laden, danach z.B. 1d
 
 logger:
   level: DEBUG
@@ -22,9 +18,6 @@ logger:
 api:
   encryption:
     key: "ieLzn/ZYWI8TX5wVKSPcZHNtjeXI4d8JnEH8RTjOGDI="
-
-web_server:
-  port: 80
 
 ota:
   - platform: esphome
@@ -37,10 +30,10 @@ wifi:
 uart:
   id: heater_uart
   rx_pin:
-    number: GPIO19
+    number: GPIO17
     inverted: true
   tx_pin:
-    number: GPIO18
+    number: GPIO16
     inverted: true
   baud_rate: 4800
 
@@ -48,7 +41,7 @@ uart:
 # Pin: GPIO4, GPIO32 oder GPIO33 (ESP32: nur Pins mit Ein+Ausgang; GPIO28 existiert am ESP32 nicht)
 one_wire:
   - platform: gpio
-    pin: GPIO33
+    pin: GPIO32
     id: one_wire_bus
 
 sensor:
@@ -56,15 +49,9 @@ sensor:
   # Bei mehreren Sensoren besser address: 0x... aus dem Log verwenden (stabil)
   - platform: dallas_temp
     one_wire_id: one_wire_bus
-    index: 0
+    address: 0xd43ce1e3810bed28
     id: raumtemperatur
     name: "Raumtemperatur"
-    update_interval: 5s
-  - platform: dallas_temp
-    one_wire_id: one_wire_bus
-    index: 1
-    id: luftauslass
-    name: "Luftauslass Temperatur"
     update_interval: 5s
 
 sunster_heater:
@@ -74,9 +61,11 @@ sunster_heater:
   control_mode: automatic
   external_temperature_sensor: raumtemperatur
   target_temperature: 18.0
-  # PI-Regler: Stellwert 0–100 %, unter min_off aus, ab min_on ein
-  pi_kp: 20.0
-  pi_ki: 0.05
+  # PID-Regler (abgestimmt auf ~0,5°C/min Aufheizung): Stellwert 0–100 %, unter min_off aus, ab min_on ein
+  pi_kp: 6.0
+  pi_ki: 0.03
+  pi_kd: 2.0
+  pi_off_delay: 60.0
   pi_output_min_off: 3.0
   pi_output_min_on: 15.0
   default_power_percent: 10
@@ -95,27 +84,51 @@ sunster_heater:
   # Automatik-Modus: PI-Regler + Hysterese (UI-einstellbar)
   pi_kp_number:
     name: "Heizung PI Kp"
+    restore_value: true  # Saves value to flash
+    optimistic: true
+    initial_value: 20
   pi_ki_number:
     name: "Heizung PI Ki"
+    restore_value: true  # Saves value to flash
+    optimistic: true
+    initial_value: 0.1
   pi_kd_number:
     name: "Heizung PI Kd"
+    restore_value: true  # Saves value to flash
+    optimistic: true
+    initial_value: 0.2
   pi_off_delay_number:
     name: "Heizung Abschalt-Verzögerung (s)"
+    restore_value: true  # Saves value to flash
+    optimistic: true
+    initial_value: 180
     min_value: 0
     max_value: 600
     step: 10
   target_temperature_number:
     name: "Heizung Solltemperatur"
+    restore_value: true  # Saves value to flash
+    optimistic: true
+    initial_value: 21
   pi_output_min_off_number:
     name: "Heizung Hysterese Aus (Stellwert %)"
+    restore_value: true  # Saves value to flash
+    optimistic: true
+    initial_value: 3
   pi_output_min_on_number:
     name: "Heizung Hysterese Ein (Stellwert %)"
+    restore_value: true  # Saves value to flash
+    optimistic: true
+    initial_value: 10
 
   injected_per_pulse_number:
     name: "Fuel Injected Per Pulse"
+    restore_value: true  # Saves value to flash
+    optimistic: true
     min_value: 0.001
     max_value: 0.10
     step: 0.001
+    initial_value: 0.022
 
   reset_total_consumption_button:
     name: "Reset Total Fuel Consumption"

@@ -90,6 +90,14 @@ CONF_PI_OUTPUT = "pi_output"
 UNIT_MILLILITERS = "ml"
 UNIT_MILLILITERS_PER_HOUR = "ml/h"
 
+# Standard number options (wie normale ESPHome Numbers, für YAML-Kompatibilität)
+# restore_value/optimistic/initial_value werden im Schema akzeptiert; Persistenz macht weiterhin der Heater (pref_config_).
+NUMBER_EXTRA = {
+    cv.Optional("restore_value", default=False): cv.boolean,
+    cv.Optional("optimistic", default=True): cv.boolean,
+    cv.Optional("initial_value"): cv.float_,
+}
+
 # Simplified sensor schemas with good defaults
 SENSOR_SCHEMAS = {
     CONF_INPUT_VOLTAGE: sensor.sensor_schema(
@@ -248,6 +256,7 @@ CONFIG_SCHEMA = cv.All(
                 cv.Optional("min_value", default=0.001): cv.float_,
                 cv.Optional("max_value", default=1.0): cv.float_,
                 cv.Optional("step", default=0.001): cv.float_,
+                **NUMBER_EXTRA,
             }),
             cv.Optional(CONF_RESET_TOTAL_CONSUMPTION_BUTTON): button.button_schema(
                 SunsterResetTotalConsumptionButton,
@@ -272,6 +281,7 @@ CONFIG_SCHEMA = cv.All(
                 cv.Optional("min_value", default=10.0): cv.float_,
                 cv.Optional("max_value", default=100.0): cv.float_,
                 cv.Optional("step", default=10.0): cv.float_,
+                **NUMBER_EXTRA,
             }),
             cv.Optional(CONF_PI_KP_NUMBER): number.number_schema(
                 SunsterPiKpNumber,
@@ -282,6 +292,7 @@ CONFIG_SCHEMA = cv.All(
                 cv.Optional("min_value", default=0.1): cv.float_,
                 cv.Optional("max_value", default=50.0): cv.float_,
                 cv.Optional("step", default=0.5): cv.float_,
+                **NUMBER_EXTRA,
             }),
             cv.Optional(CONF_PI_KI_NUMBER): number.number_schema(
                 SunsterPiKiNumber,
@@ -292,6 +303,7 @@ CONFIG_SCHEMA = cv.All(
                 cv.Optional("min_value", default=0.0): cv.float_,
                 cv.Optional("max_value", default=5.0): cv.float_,
                 cv.Optional("step", default=0.01): cv.float_,
+                **NUMBER_EXTRA,
             }),
             cv.Optional(CONF_PI_KD_NUMBER): number.number_schema(
                 SunsterPiKdNumber,
@@ -302,6 +314,7 @@ CONFIG_SCHEMA = cv.All(
                 cv.Optional("min_value", default=0.0): cv.float_,
                 cv.Optional("max_value", default=50.0): cv.float_,
                 cv.Optional("step", default=0.1): cv.float_,
+                **NUMBER_EXTRA,
             }),
             cv.Optional(CONF_PI_OFF_DELAY_NUMBER): number.number_schema(
                 SunsterPiOffDelayNumber,
@@ -312,6 +325,7 @@ CONFIG_SCHEMA = cv.All(
                 cv.Optional("min_value", default=0.0): cv.float_,
                 cv.Optional("max_value", default=600.0): cv.float_,
                 cv.Optional("step", default=10.0): cv.float_,
+                **NUMBER_EXTRA,
             }),
             cv.Optional(CONF_TARGET_TEMPERATURE_NUMBER): number.number_schema(
                 SunsterTargetTemperatureNumber,
@@ -322,6 +336,7 @@ CONFIG_SCHEMA = cv.All(
                 cv.Optional("min_value", default=5.0): cv.float_,
                 cv.Optional("max_value", default=35.0): cv.float_,
                 cv.Optional("step", default=0.5): cv.float_,
+                **NUMBER_EXTRA,
             }),
             cv.Optional(CONF_PI_OUTPUT_MIN_OFF_NUMBER): number.number_schema(
                 SunsterPiOutputMinOffNumber,
@@ -332,6 +347,7 @@ CONFIG_SCHEMA = cv.All(
                 cv.Optional("min_value", default=0.0): cv.float_,
                 cv.Optional("max_value", default=20.0): cv.float_,
                 cv.Optional("step", default=1.0): cv.float_,
+                **NUMBER_EXTRA,
             }),
             cv.Optional(CONF_PI_OUTPUT_MIN_ON_NUMBER): number.number_schema(
                 SunsterPiOutputMinOnNumber,
@@ -342,6 +358,7 @@ CONFIG_SCHEMA = cv.All(
                 cv.Optional("min_value", default=5.0): cv.float_,
                 cv.Optional("max_value", default=50.0): cv.float_,
                 cv.Optional("step", default=1.0): cv.float_,
+                **NUMBER_EXTRA,
             }),
         }
     )
