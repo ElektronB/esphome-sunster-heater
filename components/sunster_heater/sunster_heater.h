@@ -268,8 +268,10 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   uint32_t last_pi_time_{0};
   uint32_t time_entered_off_region_{0};
   uint32_t time_stable_combustion_entered_{0};  // when entered STABLE_COMBUSTION for min-on time
+  uint32_t time_external_temp_lost_{0};  // when external temperature sensor lost signal
   static constexpr float PI_INTEGRAL_MAX = 100.0f;
   static constexpr uint32_t PI_MIN_ON_TIME_MS = 30000;  // 30s min on after stable combustion
+  static constexpr uint32_t PI_SENSOR_GRACE_PERIOD_MS = 600000;  // 600s grace period for sensor loss
 
   // Parsed sensor values
   float current_temperature_{0.0};

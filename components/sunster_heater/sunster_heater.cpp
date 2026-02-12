@@ -82,6 +82,15 @@ void SunsterHeater::update() {
   // Update external temperature reading if sensor is available
   if (external_temperature_sensor_ != nullptr && external_temperature_sensor_->has_state()) {
     external_temperature_ = external_temperature_sensor_->state;
+    // Reset grace period timer if sensor is back online
+    if (time_external_temp_lost_ != 0) {
+      ESP_LOGI(TAG, "External temperature sensor recovered, resetting grace period");
+      time_external_temp_lost_ = 0;
+    }
+  } else if (external_temperature_sensor_ != nullptr && time_external_temp_lost_ == 0) {
+    // Sensor just lost signal - start grace period timer
+    time_external_temp_lost_ = millis();
+    ESP_LOGW(TAG, "External temperature sensor lost signal, starting %ds grace period", PI_SENSOR_GRACE_PERIOD_MS / 1000);
   }
   
   // Check for daily reset
@@ -889,12 +898,44 @@ void SunsterHeater::handle_antifreeze_mode() {
 }
 
 void SunsterHeater::handle_automatic_mode() {
-  if (!has_external_sensor()) {
+  // Check if external temperature sensor is available
+  bool sensor_has_state = (external_temperature_sensor_ != nullptr && external_temperature_sensor_->has_state());
+  bool sensor_has_valid_value = !std::isnan(external_temperature_);
+  
+  // If sensor lost signal, check grace period
+  if (!sensor_has_state && sensor_has_valid_value) {
+    // Sensor lost signal but we have a last valid value - use grace period
+    uint32_t now = millis();
+    if (time_external_temp_lost_ == 0) {
+      time_external_temp_lost_ = now;
+      ESP_LOGW(TAG, "[PID] Sensor lost signal, starting %ds grace period (using last valid temp=%.1f°C)", 
+               PI_SENSOR_GRACE_PERIOD_MS / 1000, external_temperature_);
+    } else {
+      uint32_t elapsed = now - time_external_temp_lost_;
+      if (elapsed >= PI_SENSOR_GRACE_PERIOD_MS) {
+        // Grace period expired - force shutdown
+        ESP_LOGW(TAG, "[PID] Sensor grace period expired (%ds), forcing shutdown", PI_SENSOR_GRACE_PERIOD_MS / 1000);
+        if (heater_enabled_) {
+          turn_off();
+        }
+        last_pi_output_ = 0.0f;
+        if (pi_output_sensor_) pi_output_sensor_->publish_state(0.0f);
+        time_external_temp_lost_ = 0;
+        return;
+      } else {
+        // Still in grace period - continue with last valid temperature
+        ESP_LOGD(TAG, "[PID] Sensor offline, using last valid temp=%.1f°C (grace period: %ds remaining)", 
+                 external_temperature_, (PI_SENSOR_GRACE_PERIOD_MS - elapsed) / 1000);
+      }
+    }
+  } else if (!sensor_has_state && !sensor_has_valid_value) {
+    // No sensor configured or never had a valid reading - cannot operate
     if (heater_enabled_) {
       turn_off();
     }
     last_pi_output_ = 0.0f;
     if (pi_output_sensor_) pi_output_sensor_->publish_state(0.0f);
+    time_external_temp_lost_ = 0;
     return;
   }
 
