@@ -9,6 +9,7 @@
 #include <ctime>
 #include <string>
 #include <cmath>
+#include <algorithm>
 #ifndef M_PI
 #define M_PI 3.1415926535897932384626433832795
 #endif
@@ -66,6 +67,24 @@ void SunsterHeater::setup() {
     hourly_consumption_sensor_->publish_state(0.0f);
   }
   
+  // Register callback for external temperature sensor to trigger PID controller only on new values
+  if (external_temperature_sensor_) {
+    external_temperature_sensor_->add_on_state_callback([this](float state) {
+      external_temperature_ = state;
+      last_external_temperature_ = state;
+      // Reset grace period timer if sensor is back online
+      if (time_external_temp_lost_ != 0) {
+        ESP_LOGI(TAG, "External temperature sensor recovered, resetting grace period");
+        time_external_temp_lost_ = 0;
+      }
+      // Trigger PID controller only if in automatic mode and not running autotune
+      if (control_mode_ == ControlMode::AUTOMATIC && autotune_state_ != AutotuneState::AUTOTUNE_RUNNING) {
+        handle_automatic_mode();
+      }
+    });
+    ESP_LOGD(TAG, "Registered callback for external temperature sensor - PID will run only on new values");
+  }
+  
   ESP_LOGCONFIG(TAG, "Sunster Heater setup completed");
   ESP_LOGCONFIG(TAG, "Control mode: %s", control_mode_ == ControlMode::AUTOMATIC ? "Automatic" : "Manual");
   ESP_LOGCONFIG(TAG, "Default power level: %.0f%%", default_power_percent_);
@@ -84,8 +103,15 @@ void SunsterHeater::setup() {
 
 void SunsterHeater::update() {
   // Update external temperature reading if sensor is available
+  // Note: PID-Regler wird über Callback ausgelöst, nicht hier
   if (external_temperature_sensor_ != nullptr && external_temperature_sensor_->has_state()) {
-    external_temperature_ = external_temperature_sensor_->state;
+    float new_temp = external_temperature_sensor_->state;
+    // Track temperature change (for fallback, but callback is primary mechanism)
+    bool temp_changed = (std::isnan(last_external_temperature_) || 
+                        std::fabs(new_temp - last_external_temperature_) > 0.01f);  // 0.01°C Toleranz
+    external_temperature_ = new_temp;
+    last_external_temperature_ = new_temp;
+    
     // Reset grace period timer if sensor is back online
     if (time_external_temp_lost_ != 0) {
       ESP_LOGI(TAG, "External temperature sensor recovered, resetting grace period");
@@ -107,10 +133,12 @@ void SunsterHeater::update() {
   if (autotune_state_ == AutotuneState::AUTOTUNE_RUNNING) {
     handle_autotune();
   } else {
-    // Handle automatic mode (PI controller)
-    if (control_mode_ == ControlMode::AUTOMATIC) {
+    // Handle automatic mode (PI controller) - nur wenn kein Callback registriert ist
+    // (Callback-Mechanismus wird in setup() registriert und ist effizienter)
+    // Fallback für den Fall, dass Callback nicht funktioniert:
+    if (control_mode_ == ControlMode::AUTOMATIC && external_temperature_sensor_ == nullptr) {
       handle_automatic_mode();
-    } else if (pi_output_sensor_) {
+    } else if (pi_output_sensor_ && control_mode_ != ControlMode::AUTOMATIC) {
       last_pi_output_ = 0.0f;
       pi_output_sensor_->publish_state(0.0f);
     }
@@ -1372,13 +1400,31 @@ void SunsterHeater::handle_autotune() {
             // Ziegler-Nichols PID parameters
             float kp = 0.6f * ku;
             float ki = 1.2f * ku / mean_period;
+            
+            // Kd-Formel für träge Systeme anpassen (Option B: Skalierung für lange Perioden)
             float kd = 0.075f * ku * mean_period;
+            // Für träge Systeme: zusätzliche Reduzierung bei Perioden > 300s
+            if (mean_period > 300.0f) {
+              kd = kd * (300.0f / mean_period);  // Skaliert runter für lange Perioden
+            }
             
             ESP_LOGI(TAG, "[AUTOTUNE] Calculation complete:");
             ESP_LOGI(TAG, "  Mean amplitude: %.2f°C", mean_amplitude);
             ESP_LOGI(TAG, "  Mean period: %.1fs", mean_period);
             ESP_LOGI(TAG, "  K_u: %.2f", ku);
-            ESP_LOGI(TAG, "  Calculated PID: Kp=%.2f Ki=%.5f Kd=%.2f", kp, ki, kd);
+            ESP_LOGI(TAG, "  Calculated PID (raw): Kp=%.2f Ki=%.5f Kd=%.2f", kp, ki, kd);
+            
+            // Grenzenprüfung (entsprechend __init__.py)
+            kp = std::clamp(kp, 0.1f, 50.0f);
+            ki = std::clamp(ki, 0.0f, 5.0f);
+            kd = std::clamp(kd, 0.0f, 50.0f);
+            
+            // Rundung auf sinnvolle Dezimalstellen (entsprechend step-Werten)
+            kp = roundf(kp / 0.5f) * 0.5f;  // Auf 0.5 Schritte
+            ki = roundf(ki / 0.01f) * 0.01f;  // Auf 0.01 Schritte
+            kd = roundf(kd / 0.1f) * 0.1f;  // Auf 0.1 Schritte
+            
+            ESP_LOGI(TAG, "[AUTOTUNE] Final PID (after clamping/rounding): Kp=%.2f Ki=%.2f Kd=%.2f", kp, ki, kd);
             
             // Apply parameters
             pi_kp_ = kp;

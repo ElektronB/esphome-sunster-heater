@@ -319,6 +319,7 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   bool time_sync_warning_shown_{false};
 
   sensor::Sensor *external_temperature_sensor_{nullptr};
+  float last_external_temperature_{NAN};
   sensor::Sensor *input_voltage_sensor_{nullptr};
   text_sensor::TextSensor *state_sensor_{nullptr};
   sensor::Sensor *power_level_sensor_{nullptr};
