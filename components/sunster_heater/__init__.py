@@ -266,7 +266,6 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_CONTROL_MODE_SELECT): select.select_schema(
                 SunsterControlModeSelect,
                 icon="mdi:format-list-bulleted",
-                entity_category="config",
             ),
             cv.Optional(CONF_POWER_SWITCH): switch.switch_schema(
                 SunsterHeaterPowerSwitch,
@@ -276,7 +275,6 @@ CONFIG_SCHEMA = cv.All(
                 SunsterHeaterPowerLevelNumber,
                 unit_of_measurement=UNIT_PERCENT,
                 icon="mdi:percent",
-                entity_category="config",
             ).extend({
                 cv.Optional("min_value", default=10.0): cv.float_,
                 cv.Optional("max_value", default=100.0): cv.float_,
@@ -331,7 +329,6 @@ CONFIG_SCHEMA = cv.All(
                 SunsterTargetTemperatureNumber,
                 unit_of_measurement=UNIT_CELSIUS,
                 icon=ICON_THERMOMETER,
-                entity_category="config",
             ).extend({
                 cv.Optional("min_value", default=5.0): cv.float_,
                 cv.Optional("max_value", default=35.0): cv.float_,

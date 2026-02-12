@@ -266,7 +266,9 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   float last_error_{0.0f};
   uint32_t last_pi_time_{0};
   uint32_t time_entered_off_region_{0};
+  uint32_t time_stable_combustion_entered_{0};  // when entered STABLE_COMBUSTION for min-on time
   static constexpr float PI_INTEGRAL_MAX = 100.0f;
+  static constexpr uint32_t PI_MIN_ON_TIME_MS = 30000;  // 30s min on after stable combustion
 
   // Parsed sensor values
   float current_temperature_{0.0};
