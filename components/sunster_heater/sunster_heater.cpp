@@ -70,6 +70,12 @@ void SunsterHeater::setup() {
   // Register callback for external temperature sensor to trigger PID controller only on new values
   if (external_temperature_sensor_) {
     external_temperature_sensor_->add_on_state_callback([this](float state) {
+      // Prüfe auf gültigen Wert: NaN und Plausibilitätsprüfung (-50°C bis +100°C)
+      if (std::isnan(state) || state < -50.0f || state > 100.0f) {
+        ESP_LOGW(TAG, "[PID] Invalid sensor value received: %.1f°C, skipping PID calculation", state);
+        return;  // PID-Berechnung überspringen
+      }
+      
       external_temperature_ = state;
       last_external_temperature_ = state;
       // Reset grace period timer if sensor is back online
@@ -935,9 +941,29 @@ void SunsterHeater::handle_antifreeze_mode() {
 }
 
 void SunsterHeater::handle_automatic_mode() {
-  // Check if external temperature sensor is available
+  // Frühe Validierung: Prüfe auf gültigen Sensorwert BEVOR PID-Berechnung
   bool sensor_has_state = (external_temperature_sensor_ != nullptr && external_temperature_sensor_->has_state());
-  bool sensor_has_valid_value = !std::isnan(external_temperature_);
+  bool sensor_has_valid_value = !std::isnan(external_temperature_) && 
+                                external_temperature_ >= -50.0f && 
+                                external_temperature_ <= 100.0f;
+  
+  // Wenn kein gültiger Wert vorhanden ist, PID überspringen
+  if (!sensor_has_valid_value) {
+    if (sensor_has_state) {
+      // Sensor hat State, aber Wert ist ungültig (NaN oder außerhalb Bereich)
+      ESP_LOGW(TAG, "[PID] Invalid sensor value (%.1f°C), skipping PID calculation", external_temperature_);
+    }
+    // PID-Output auf 0 setzen
+    last_pi_output_ = 0.0f;
+    if (pi_output_sensor_) pi_output_sensor_->publish_state(0.0f);
+    time_entered_off_region_ = 0;
+    // Grace-Period-Logik beibehalten für den Fall, dass Sensor wieder kommt
+    if (!sensor_has_state && time_external_temp_lost_ == 0) {
+      time_external_temp_lost_ = millis();
+      ESP_LOGW(TAG, "[PID] Sensor lost signal, starting %ds grace period", PI_SENSOR_GRACE_PERIOD_MS / 1000);
+    }
+    return;
+  }
   
   // If sensor lost signal, check grace period
   if (!sensor_has_state && sensor_has_valid_value) {
