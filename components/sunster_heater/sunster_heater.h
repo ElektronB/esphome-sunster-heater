@@ -485,9 +485,9 @@ class SunsterHeaterPowerSwitch : public switch_::Switch, public Component {
     if (heater_) {
       heater_->set_automatic_master_enabled(state);
       if (state) {
-        bool ok = heater_->turn_on();
-        this->publish_state(ok);
-        last_published_state_ = ok;
+        heater_->turn_on();
+        this->publish_state(true);
+        last_published_state_ = true;
       } else {
         heater_->turn_off();
         this->publish_state(state);

@@ -1002,17 +1002,6 @@ void SunsterHeater::handle_automatic_mode() {
     return;
   }
 
-  // PID only active when heater is on, in automatic mode, and in STABLE_COMBUSTION.
-  // During preheat (POLLING_STATE, HEATING_UP) and cooldown (STOPPING_COOLING): output 0, no integral windup.
-  if (current_state_ != HeaterState::STABLE_COMBUSTION) {
-    last_pi_output_ = 0.0f;
-    if (pi_output_sensor_) pi_output_sensor_->publish_state(0.0f);
-    time_entered_off_region_ = 0;
-  ESP_LOGV(TAG, "[PID] soll=%.1f ist=%.1f out=0.0 (state=%s, not stable) enabled=%s",
-           target_temperature_, external_temperature_, state_to_string(current_state_), heater_enabled_ ? "ON" : "OFF");
-    return;
-  }
-
   if (!automatic_master_enabled_) {
     // Power switch OFF – PID must not turn on; keep output 0
     if (heater_enabled_) {
@@ -1021,6 +1010,24 @@ void SunsterHeater::handle_automatic_mode() {
     last_pi_output_ = 0.0f;
     if (pi_output_sensor_) pi_output_sensor_->publish_state(0.0f);
     time_entered_off_region_ = 0;
+    return;
+  }
+
+  // Cooldown: PID bei 0%, kein Integral-Windup
+  if (current_state_ == HeaterState::STOPPING_COOLING) {
+    last_pi_output_ = 0.0f;
+    if (pi_output_sensor_) pi_output_sensor_->publish_state(0.0f);
+    time_entered_off_region_ = 0;
+    ESP_LOGV(TAG, "[PID] soll=%.1f ist=%.1f out=0.0 (state=Cooldown) no windup", target_temperature_, external_temperature_);
+    return;
+  }
+  // Preheat (vor stabile Verbrennung): Leistung nicht regelbar, Regler auf Min 10%
+  if (current_state_ == HeaterState::POLLING_STATE || current_state_ == HeaterState::HEATING_UP) {
+    const float preheat_output = 10.0f;
+    last_pi_output_ = preheat_output;
+    if (pi_output_sensor_) pi_output_sensor_->publish_state(preheat_output);
+    time_entered_off_region_ = 0;
+    ESP_LOGV(TAG, "[PID] soll=%.1f ist=%.1f out=%.0f (state=Preheat, min) no windup", target_temperature_, external_temperature_, preheat_output);
     return;
   }
 
@@ -1050,12 +1057,21 @@ void SunsterHeater::handle_automatic_mode() {
     pi_output_sensor_->publish_state(output);
   }
 
-  // Wenn Soll-Temp < Ist-Temp, darf die Heizung nicht starten (nur PID aktiv für Hysterese)
+  // Wenn Soll-Temp < Ist-Temp: Heizung nicht starten, PID gibt 0% bis ist < soll
   bool soll_unter_ist = (target_temperature_ < external_temperature_);
   
   ESP_LOGV(TAG, "[PID] soll=%.1f ist=%.1f out=%.1f out_stepped=%.0f enabled=%s soll_unter_ist=%s",
            target_temperature_, external_temperature_, output, output_stepped, heater_enabled_ ? "ON" : "OFF",
            soll_unter_ist ? "JA" : "NEIN");
+
+  // Heizung läuft nicht (OFF, Preheat, Cooldown): nur PID ausgeben, ggf. starten wenn out >= min_on und soll >= ist
+  if (current_state_ != HeaterState::STABLE_COMBUSTION) {
+    time_entered_off_region_ = 0;
+    if (!heater_enabled_ && output_stepped >= pi_output_min_on_ && !soll_unter_ist) {
+      turn_on();
+    }
+    return;
+  }
 
   if (output < pi_output_min_off_) {
     // Output is below turn-off threshold (Aus-Zone)
@@ -1185,14 +1201,14 @@ bool SunsterHeater::turn_on() {
       ESP_LOGE(TAG, "Cannot turn on heater: automatic mode requires external temperature sensor!");
       return false;
     }
-    // Im Automatikmodus: Heizung nicht starten wenn Soll < Ist (nur PID aktiv für Hysterese)
+    // Im Automatikmodus: Heizung nicht physisch starten wenn Soll < Ist (Schalter bleibt ON, nur PID rechnet)
     // Ausnahme: während Autotune darf die Heizung starten
     if (autotune_state_ != AutotuneState::AUTOTUNE_RUNNING &&
         !std::isnan(external_temperature_) && external_temperature_ >= -50.0f && external_temperature_ <= 100.0f &&
         target_temperature_ < external_temperature_) {
-      ESP_LOGW(TAG, "Heater start blocked: Soll (%.1f°C) < Ist (%.1f°C), PID stays active for hysteresis",
+      ESP_LOGD(TAG, "Heater start deferred: Soll (%.1f°C) < Ist (%.1f°C), switch ON, PID active until ist < soll",
                target_temperature_, external_temperature_);
-      return false;
+      return true;  // Schalter bleibt ON, heater_enabled_ bleibt false bis PID bei ist < soll startet
     }
   }
   
