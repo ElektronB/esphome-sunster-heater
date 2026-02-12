@@ -40,9 +40,11 @@ SunsterPiKpNumber = sunster_heater_ns.class_("SunsterPiKpNumber", number.Number,
 SunsterPiKiNumber = sunster_heater_ns.class_("SunsterPiKiNumber", number.Number, cg.Component)
 SunsterPiKdNumber = sunster_heater_ns.class_("SunsterPiKdNumber", number.Number, cg.Component)
 SunsterPiOffDelayNumber = sunster_heater_ns.class_("SunsterPiOffDelayNumber", number.Number, cg.Component)
+SunsterPiOnDelayNumber = sunster_heater_ns.class_("SunsterPiOnDelayNumber", number.Number, cg.Component)
 SunsterTargetTemperatureNumber = sunster_heater_ns.class_("SunsterTargetTemperatureNumber", number.Number, cg.Component)
 SunsterPiOutputMinOffNumber = sunster_heater_ns.class_("SunsterPiOutputMinOffNumber", number.Number, cg.Component)
 SunsterPiOutputMinOnNumber = sunster_heater_ns.class_("SunsterPiOutputMinOnNumber", number.Number, cg.Component)
+SunsterPiMinOnTimeNumber = sunster_heater_ns.class_("SunsterPiMinOnTimeNumber", number.Number, cg.Component)
 
 # Configuration keys
 CONF_AUTO_SENSORS = "auto_sensors"
@@ -63,9 +65,11 @@ CONF_PI_KP_NUMBER = "pi_kp_number"
 CONF_PI_KI_NUMBER = "pi_ki_number"
 CONF_PI_KD_NUMBER = "pi_kd_number"
 CONF_PI_OFF_DELAY_NUMBER = "pi_off_delay_number"
+CONF_PI_ON_DELAY_NUMBER = "pi_on_delay_number"
 CONF_TARGET_TEMPERATURE_NUMBER = "target_temperature_number"
 CONF_PI_OUTPUT_MIN_OFF_NUMBER = "pi_output_min_off_number"
 CONF_PI_OUTPUT_MIN_ON_NUMBER = "pi_output_min_on_number"
+CONF_PI_MIN_ON_TIME_NUMBER = "pi_min_on_time_number"
 
 # Control mode options
 CONTROL_MODE_MANUAL = "manual"
@@ -343,6 +347,17 @@ CONFIG_SCHEMA = cv.All(
                 cv.Optional("step", default=10.0): cv.float_,
                 **NUMBER_EXTRA,
             }),
+            cv.Optional(CONF_PI_ON_DELAY_NUMBER): number.number_schema(
+                SunsterPiOnDelayNumber,
+                unit_of_measurement="s",
+                icon="mdi:timer-outline",
+                entity_category="config",
+            ).extend({
+                cv.Optional("min_value", default=0.0): cv.float_,
+                cv.Optional("max_value", default=600.0): cv.float_,
+                cv.Optional("step", default=5.0): cv.float_,
+                **NUMBER_EXTRA,
+            }),
             cv.Optional(CONF_TARGET_TEMPERATURE_NUMBER): number.number_schema(
                 SunsterTargetTemperatureNumber,
                 unit_of_measurement=UNIT_CELSIUS,
@@ -374,6 +389,17 @@ CONFIG_SCHEMA = cv.All(
                 cv.Optional("min_value", default=5.0): cv.float_,
                 cv.Optional("max_value", default=50.0): cv.float_,
                 cv.Optional("step", default=1.0): cv.float_,
+                **NUMBER_EXTRA,
+            }),
+            cv.Optional(CONF_PI_MIN_ON_TIME_NUMBER): number.number_schema(
+                SunsterPiMinOnTimeNumber,
+                unit_of_measurement="s",
+                icon="mdi:timer",
+                entity_category="config",
+            ).extend({
+                cv.Optional("min_value", default=0.0): cv.float_,
+                cv.Optional("max_value", default=300.0): cv.float_,
+                cv.Optional("step", default=5.0): cv.float_,
                 **NUMBER_EXTRA,
             }),
         }
@@ -588,6 +614,11 @@ async def to_code(config):
         num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
         cg.add(num.set_sunster_heater(var))
         cg.add(var.set_pi_off_delay_number(num))
+    if CONF_PI_ON_DELAY_NUMBER in config:
+        num_config = config[CONF_PI_ON_DELAY_NUMBER]
+        num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
+        cg.add(num.set_sunster_heater(var))
+        cg.add(var.set_pi_on_delay_number(num))
     if CONF_TARGET_TEMPERATURE_NUMBER in config:
         num_config = config[CONF_TARGET_TEMPERATURE_NUMBER]
         num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
@@ -603,3 +634,8 @@ async def to_code(config):
         num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
         cg.add(num.set_sunster_heater(var))
         cg.add(var.set_pi_output_min_on_number(num))
+    if CONF_PI_MIN_ON_TIME_NUMBER in config:
+        num_config = config[CONF_PI_MIN_ON_TIME_NUMBER]
+        num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
+        cg.add(num.set_sunster_heater(var))
+        cg.add(var.set_pi_min_on_time_number(num))

@@ -667,7 +667,7 @@ void SunsterHeater::load_config_data() {
   HeaterConfigData data;
   if (pref_config_.load(&data)) {
     ESP_LOGI(TAG, "[CONFIG] Flash preference loaded, version=%u", data.version);
-    if (data.version == 3) {
+    if (data.version >= 3 && data.version <= 5) {
       if (std::isnan(data.pi_kp) || std::isnan(data.pi_ki) || std::isnan(data.pi_kd) || std::isnan(data.target_temperature)) {
          ESP_LOGW(TAG, "[CONFIG] Loaded data has NAN, using defaults");
          save_config_data();
@@ -681,8 +681,14 @@ void SunsterHeater::load_config_data() {
       pi_output_min_on_ = data.pi_output_min_on;
       injected_per_pulse_ = data.injected_per_pulse;
       pi_off_delay_ = data.pi_off_delay;
-      ESP_LOGI(TAG, "[CONFIG] After boot (from flash): Kp=%.2f Ki=%.2f Kd=%.2f target=%.1f hyst=%.0f/%.0f inj=%.3f delay=%.0fs",
-               pi_kp_, pi_ki_, pi_kd_, target_temperature_, pi_output_min_off_, pi_output_min_on_, injected_per_pulse_, pi_off_delay_);
+      if (data.version >= 4) {
+        pi_min_on_time_s_ = data.pi_min_on_time_s;
+      }
+      if (data.version >= 5) {
+        pi_on_delay_s_ = data.pi_on_delay;
+      }
+      ESP_LOGI(TAG, "[CONFIG] After boot (from flash): Kp=%.2f Ki=%.2f Kd=%.2f target=%.1f hyst=%.0f/%.0f inj=%.3f delay_off=%.0fs delay_on=%.0fs tmin=%.1fs",
+               pi_kp_, pi_ki_, pi_kd_, target_temperature_, pi_output_min_off_, pi_output_min_on_, injected_per_pulse_, pi_off_delay_, pi_on_delay_s_, pi_min_on_time_s_);
     } else {
       ESP_LOGW(TAG, "[CONFIG] Version mismatch (got %u), using YAML defaults", data.version);
       save_config_data();
@@ -697,7 +703,7 @@ void SunsterHeater::load_config_data() {
 
 void SunsterHeater::save_config_data() {
   HeaterConfigData data;
-  data.version = 3;
+  data.version = 5;
   data.pi_kp = pi_kp_;
   data.pi_ki = pi_ki_;
   data.pi_kd = pi_kd_;
@@ -706,6 +712,8 @@ void SunsterHeater::save_config_data() {
   data.pi_output_min_on = pi_output_min_on_;
   data.injected_per_pulse = injected_per_pulse_;
   data.pi_off_delay = pi_off_delay_;
+  data.pi_min_on_time_s = pi_min_on_time_s_;
+  data.pi_on_delay = pi_on_delay_s_;
   if (pref_config_.save(&data)) {
     ESP_LOGD(TAG, "Config preferences saved");
   } else {
@@ -745,6 +753,11 @@ void SunsterHeater::publish_all_config_entities_() {
     pi_off_delay_number_->publish_state(v);
     ESP_LOGD(TAG, "[CONFIG] push PI OffDelay = %.0f", v);
   }
+  if (pi_on_delay_number_) {
+    float v = sanitize(pi_on_delay_s_, 30.0f);
+    pi_on_delay_number_->publish_state(v);
+    ESP_LOGD(TAG, "[CONFIG] push PI OnDelay = %.0f s", v);
+  }
   if (target_temperature_number_) {
     float v = sanitize(target_temperature_, 20.0f);
     target_temperature_number_->publish_state(v);
@@ -759,6 +772,11 @@ void SunsterHeater::publish_all_config_entities_() {
     float v = sanitize(pi_output_min_on_, 15.0f);
     pi_output_min_on_number_->publish_state(v);
     ESP_LOGD(TAG, "[CONFIG] push PI MinOn = %.1f", v);
+  }
+  if (pi_min_on_time_number_) {
+    float v = sanitize(pi_min_on_time_s_, 30.0f);
+    pi_min_on_time_number_->publish_state(v);
+    ESP_LOGD(TAG, "[CONFIG] push PI MinOnTime = %.1f s", v);
   }
   if (control_mode_select_) {
     const char *mode = "Manual";
@@ -1068,7 +1086,26 @@ void SunsterHeater::handle_automatic_mode() {
   if (current_state_ != HeaterState::STABLE_COMBUSTION) {
     time_entered_off_region_ = 0;
     if (!heater_enabled_ && output_stepped >= pi_output_min_on_ && !soll_unter_ist) {
-      turn_on();
+      // Einschalt-Verzögerung: PID muss für pi_on_delay_s_ über min_on bleiben
+      if (time_entered_on_region_ == 0) {
+        time_entered_on_region_ = now;
+        ESP_LOGD(TAG, "[PID] Einschalt-Timer start: out_stepped=%.0f >= min_on=%.1f, warte %.0fs", output_stepped, pi_output_min_on_, pi_on_delay_s_);
+      } else {
+        float elapsed_s = (now - time_entered_on_region_) / 1000.0f;
+        if (elapsed_s >= pi_on_delay_s_) {
+          ESP_LOGD(TAG, "[PID] Einschalt-Timer abgelaufen (%.1fs >= %.0fs) -> starte Heizung", elapsed_s, pi_on_delay_s_);
+          turn_on();
+          time_entered_on_region_ = 0;
+        } else {
+          ESP_LOGD(TAG, "[PID] Einschalt-Timer läuft: %.1fs / %.0fs", elapsed_s, pi_on_delay_s_);
+        }
+      }
+    } else {
+      // Output unter min_on oder soll < ist: Timer zurücksetzen
+      if (time_entered_on_region_ != 0) {
+        ESP_LOGD(TAG, "[PID] Einschalt-Timer zurückgesetzt (out=%.0f < min_on=%.1f oder soll < ist)", output_stepped, pi_output_min_on_);
+        time_entered_on_region_ = 0;
+      }
     }
     return;
   }
@@ -1077,10 +1114,11 @@ void SunsterHeater::handle_automatic_mode() {
     // Output is below turn-off threshold (Aus-Zone)
     ESP_LOGD(TAG, "[HYST] out=%.1f < min_off=%.1f -> Aus-Zone", output, pi_output_min_off_);
     if (heater_enabled_) {
-      // Min-on time: do not turn off within PI_MIN_ON_TIME_MS after entering STABLE_COMBUSTION
+      // Min-on time: do not turn off within pi_min_on_time_s_ after entering STABLE_COMBUSTION
       uint32_t stable_elapsed = (time_stable_combustion_entered_ != 0) ? (now - time_stable_combustion_entered_) : 0;
-      if (stable_elapsed < PI_MIN_ON_TIME_MS) {
-        ESP_LOGD(TAG, "[HYST] Min-on: %.1fs / 30s – Heizung bleibt min_on=%.0f%%", stable_elapsed / 1000.0f, pi_output_min_on_);
+      uint32_t min_on_time_ms = static_cast<uint32_t>(pi_min_on_time_s_ * 1000.0f);
+      if (stable_elapsed < min_on_time_ms) {
+        ESP_LOGD(TAG, "[HYST] Min-on: %.1fs / %.1fs – Heizung bleibt min_on=%.0f%%", stable_elapsed / 1000.0f, pi_min_on_time_s_, pi_output_min_on_);
         set_power_level_percent(pi_output_min_on_);
         time_entered_off_region_ = 0;
         return;
@@ -1104,6 +1142,7 @@ void SunsterHeater::handle_automatic_mode() {
     }
   } else {
     time_entered_off_region_ = 0;
+    time_entered_on_region_ = 0;  // Timer zurücksetzen wenn Heizung läuft
 
     if (output_stepped >= pi_output_min_on_) {
       ESP_LOGD(TAG, "[HYST] out_stepped=%.0f >= min_on=%.1f -> Ein-Zone, Leistung=%.0f%%", output_stepped, pi_output_min_on_, output_stepped);

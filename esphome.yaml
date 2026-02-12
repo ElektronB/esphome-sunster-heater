@@ -52,10 +52,9 @@ sensor:
     address: 0xd43ce1e3810bed28
     id: raumtemperatur
     name: "Raumtemperatur"
-    update_interval: 10s  # Langsamere Abfrage für bessere Stabilität
+    update_interval: 3s  # Langsamere Abfrage für bessere Stabilität
     filters:
       - filter_out: nan  # Filtert NaN-Werte heraus
-      - throttle: 30s     # Zusätzliche Drosselung für Stabilität
 
 sunster_heater:
   id: my_heater
@@ -65,8 +64,8 @@ sunster_heater:
   external_temperature_sensor: raumtemperatur
   target_temperature: 18.0
   # PID-Regler (abgestimmt auf ~0,5°C/min Aufheizung): Stellwert 0–100 %, unter min_off aus, ab min_on ein
-  pi_kp: 6.0
-  pi_ki: 0.03
+  pi_kp: 10.0
+  pi_ki: 0.05
   pi_kd: 2.0
   pi_off_delay: 60.0
   pi_output_min_off: 3.0
@@ -81,6 +80,7 @@ sunster_heater:
     name: "Heizung Ein-Aus"
   power_level_number:
     name: "Heizung Leistung"
+    mode: slider
   control_mode_select:
     name: "Heizung Modus"
 
@@ -108,8 +108,17 @@ sunster_heater:
     min_value: 0
     max_value: 600
     step: 10
+  pi_on_delay_number:
+    name: "Heizung Einschalt-Verzögerung (s)"
+    restore_value: true
+    optimistic: true
+    initial_value: 30
+    min_value: 0
+    max_value: 600
+    step: 5
   target_temperature_number:
     name: "Heizung Solltemperatur"
+    mode: slider
     restore_value: true  # Saves value to flash
     optimistic: true
     initial_value: 21
@@ -123,6 +132,14 @@ sunster_heater:
     restore_value: true  # Saves value to flash
     optimistic: true
     initial_value: 10
+  pi_min_on_time_number:
+    name: "Heizung Min-On-Zeit (s)"
+    restore_value: true
+    optimistic: true
+    initial_value: 30
+    min_value: 0
+    max_value: 300
+    step: 5
 
   injected_per_pulse_number:
     name: "Fuel Injected Per Pulse"

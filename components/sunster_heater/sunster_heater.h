@@ -71,7 +71,7 @@ struct FuelConsumptionData {
 
 // Config structure for persistence (PI, target temp, hysteresis, injected_per_pulse)
 struct HeaterConfigData {
-  uint32_t version{3};
+  uint32_t version{5};
   float pi_kp;
   float pi_ki;
   float pi_kd;
@@ -80,6 +80,8 @@ struct HeaterConfigData {
   float pi_output_min_on;
   float injected_per_pulse;
   float pi_off_delay;
+  float pi_min_on_time_s;  // Min-On-Zeit nach STABLE_COMBUSTION (Sekunden)
+  float pi_on_delay;  // Einschalt-Verzögerung: Zeit die PID über min_on bleiben muss (Sekunden)
 };
 
 class SunsterHeater : public PollingComponent, public uart::UARTDevice {
@@ -106,8 +108,10 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   void set_pi_ki(float ki) { pi_ki_ = ki; }
   void set_pi_kd(float kd) { pi_kd_ = kd; }
   void set_pi_off_delay(float delay_s) { pi_off_delay_ = delay_s; }
+  void set_pi_on_delay(float delay_s) { pi_on_delay_s_ = delay_s; }
   void set_pi_output_min_off(float v) { pi_output_min_off_ = v; }
   void set_pi_output_min_on(float v) { pi_output_min_on_ = v; }
+  void set_pi_min_on_time(float time_s) { pi_min_on_time_s_ = time_s; }
   void set_autotune_high_percent(float percent) { autotune_high_percent_ = percent; }
   void set_autotune_max_duration_min(uint32_t minutes) { autotune_max_duration_ms_ = minutes * 60000UL; }
   void set_autotune_min_zero_crossings(uint8_t zc) { autotune_min_zc_ = zc; }
@@ -118,8 +122,10 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   float get_pi_ki() const { return pi_ki_; }
   float get_pi_kd() const { return pi_kd_; }
   float get_pi_off_delay() const { return pi_off_delay_; }
+  float get_pi_on_delay() const { return pi_on_delay_s_; }
   float get_pi_output_min_off() const { return pi_output_min_off_; }
   float get_pi_output_min_on() const { return pi_output_min_on_; }
+  float get_pi_min_on_time() const { return pi_min_on_time_s_; }
 
   void save_config_preferences();
 
@@ -133,9 +139,11 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   void set_pi_ki_number(number::Number *num) { pi_ki_number_ = num; }
   void set_pi_kd_number(number::Number *num) { pi_kd_number_ = num; }
   void set_pi_off_delay_number(number::Number *num) { pi_off_delay_number_ = num; }
+  void set_pi_on_delay_number(number::Number *num) { pi_on_delay_number_ = num; }
   void set_target_temperature_number(number::Number *num) { target_temperature_number_ = num; }
   void set_pi_output_min_off_number(number::Number *num) { pi_output_min_off_number_ = num; }
   void set_pi_output_min_on_number(number::Number *num) { pi_output_min_on_number_ = num; }
+  void set_pi_min_on_time_number(number::Number *num) { pi_min_on_time_number_ = num; }
   void set_control_mode_select(select::Select *sel) { control_mode_select_ = sel; }
 
   // External temperature sensor
@@ -276,16 +284,18 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   float pi_ki_{0.5f};
   float pi_kd_{0.0f};
   float pi_off_delay_{60.0f};
+  float pi_on_delay_s_{30.0f};  // Einschalt-Verzögerung: Zeit die PID über min_on bleiben muss (Sekunden)
   float pi_output_min_off_{3.0f};
   float pi_output_min_on_{15.0f};
   float pi_integral_{0.0f};
   float last_error_{0.0f};
   uint32_t last_pi_time_{0};
   uint32_t time_entered_off_region_{0};
+  uint32_t time_entered_on_region_{0};  // Timer für Einschalt-Verzögerung
   uint32_t time_stable_combustion_entered_{0};  // when entered STABLE_COMBUSTION for min-on time
   uint32_t time_external_temp_lost_{0};  // when external temperature sensor lost signal
   static constexpr float PI_INTEGRAL_MAX = 100.0f;
-  static constexpr uint32_t PI_MIN_ON_TIME_MS = 30000;  // 30s min on after stable combustion
+  float pi_min_on_time_s_{30.0f};  // Min-On-Zeit nach STABLE_COMBUSTION (Sekunden, konfigurierbar)
   static constexpr uint32_t PI_SENSOR_GRACE_PERIOD_MS = 600000;  // 600s grace period for sensor loss
 
   // Autotune constants
@@ -340,9 +350,11 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   number::Number *pi_ki_number_{nullptr};
   number::Number *pi_kd_number_{nullptr};
   number::Number *pi_off_delay_number_{nullptr};
+  number::Number *pi_on_delay_number_{nullptr};
   number::Number *target_temperature_number_{nullptr};
   number::Number *pi_output_min_off_number_{nullptr};
   number::Number *pi_output_min_on_number_{nullptr};
+  number::Number *pi_min_on_time_number_{nullptr};
   select::Select *control_mode_select_{nullptr};
   float last_pi_output_{0.0f};
 
@@ -761,6 +773,47 @@ class SunsterTargetTemperatureNumber : public number::Number, public Component {
   uint32_t last_publish_{0};
 };
 
+// Number component for PI On Delay (Einschalt-Verzögerung)
+class SunsterPiOnDelayNumber : public number::Number, public Component {
+ public:
+  void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
+  float get_setup_priority() const override { return setup_priority::AFTER_CONNECTION; }
+  void setup() override {
+    if (heater_) {
+      float v = heater_->get_pi_on_delay();
+      if (std::isnan(v)) v = 30.0f;
+      ESP_LOGI(TAG, "[SEND_HA] PI OnDelay = %.0f s (setup)", v);
+      this->publish_state(v);
+    }
+  }
+  void dump_config() override {
+    LOG_NUMBER("", "Sunster Heater PI On Delay", this);
+  }
+ protected:
+  void loop() override {
+    Component::loop();
+    if (!heater_) return;
+    uint32_t now = millis();
+    uint32_t interval = (now < 60000u) ? 3000u : 15000u;
+    if (last_publish_ == 0u || (now - last_publish_ >= interval)) {
+      float v = heater_->get_pi_on_delay();
+      if (std::isnan(v)) v = 30.0f;
+      if (last_publish_ == 0u) ESP_LOGI(TAG, "[SEND_HA] PI OnDelay = %.0f s (first loop)", v);
+      last_publish_ = now;
+      this->publish_state(v);
+    }
+  }
+  void control(float value) override {
+    if (heater_) {
+      heater_->set_pi_on_delay(value);
+      heater_->save_config_preferences();
+      this->publish_state(value);
+    }
+  }
+  SunsterHeater *heater_{nullptr};
+  uint32_t last_publish_{0};
+};
+
 // Number component for PI output min off = hysteresis lower (automatic mode)
 class SunsterPiOutputMinOffNumber : public number::Number, public Component {
  public:
@@ -835,6 +888,47 @@ class SunsterPiOutputMinOnNumber : public number::Number, public Component {
   void control(float value) override {
     if (heater_) {
       heater_->set_pi_output_min_on(value);
+      heater_->save_config_preferences();
+      this->publish_state(value);
+    }
+  }
+  SunsterHeater *heater_{nullptr};
+  uint32_t last_publish_{0};
+};
+
+// Number component for PI min on time (tmin_on) after STABLE_COMBUSTION
+class SunsterPiMinOnTimeNumber : public number::Number, public Component {
+ public:
+  void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
+  float get_setup_priority() const override { return setup_priority::AFTER_CONNECTION; }
+  void setup() override {
+    if (heater_) {
+      float v = heater_->get_pi_min_on_time();
+      if (std::isnan(v)) v = 30.0f;
+      ESP_LOGI(TAG, "[SEND_HA] PI MinOnTime = %.1f s (setup)", v);
+      this->publish_state(v);
+    }
+  }
+  void dump_config() override {
+    LOG_NUMBER("", "Sunster Heater PI Min On Time", this);
+  }
+ protected:
+  void loop() override {
+    Component::loop();
+    if (!heater_) return;
+    uint32_t now = millis();
+    uint32_t interval = (now < 60000u) ? 3000u : 15000u;
+    if (last_publish_ == 0u || (now - last_publish_ >= interval)) {
+      float v = heater_->get_pi_min_on_time();
+      if (std::isnan(v)) v = 30.0f;
+      if (last_publish_ == 0u) ESP_LOGI(TAG, "[SEND_HA] PI MinOnTime = %.1f s (first loop)", v);
+      last_publish_ = now;
+      this->publish_state(v);
+    }
+  }
+  void control(float value) override {
+    if (heater_) {
+      heater_->set_pi_min_on_time(value);
       heater_->save_config_preferences();
       this->publish_state(value);
     }
