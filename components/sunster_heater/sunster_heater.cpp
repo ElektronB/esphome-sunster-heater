@@ -954,8 +954,8 @@ void SunsterHeater::handle_automatic_mode() {
     last_pi_output_ = 0.0f;
     if (pi_output_sensor_) pi_output_sensor_->publish_state(0.0f);
     time_entered_off_region_ = 0;
-    ESP_LOGI(TAG, "[PID] soll=%.1f ist=%.1f out=0.0 (state=%s, not stable) enabled=%s",
-             target_temperature_, external_temperature_, state_to_string(current_state_), heater_enabled_ ? "ON" : "OFF");
+  ESP_LOGV(TAG, "[PID] soll=%.1f ist=%.1f out=0.0 (state=%s, not stable) enabled=%s",
+           target_temperature_, external_temperature_, state_to_string(current_state_), heater_enabled_ ? "ON" : "OFF");
     return;
   }
 
@@ -996,29 +996,29 @@ void SunsterHeater::handle_automatic_mode() {
     pi_output_sensor_->publish_state(output);
   }
 
-  ESP_LOGI(TAG, "[PID] soll=%.1f ist=%.1f out=%.1f out_stepped=%.0f enabled=%s",
+  ESP_LOGV(TAG, "[PID] soll=%.1f ist=%.1f out=%.1f out_stepped=%.0f enabled=%s",
            target_temperature_, external_temperature_, output, output_stepped, heater_enabled_ ? "ON" : "OFF");
 
   if (output < pi_output_min_off_) {
     // Output is below turn-off threshold (Aus-Zone)
-    ESP_LOGI(TAG, "[HYST] out=%.1f < min_off=%.1f -> Aus-Zone", output, pi_output_min_off_);
+    ESP_LOGD(TAG, "[HYST] out=%.1f < min_off=%.1f -> Aus-Zone", output, pi_output_min_off_);
     if (heater_enabled_) {
       // Min-on time: do not turn off within PI_MIN_ON_TIME_MS after entering STABLE_COMBUSTION
       uint32_t stable_elapsed = (time_stable_combustion_entered_ != 0) ? (now - time_stable_combustion_entered_) : 0;
       if (stable_elapsed < PI_MIN_ON_TIME_MS) {
-        ESP_LOGI(TAG, "[HYST] Min-on: %.1fs / 30s – Heizung bleibt min_on=%.0f%%", stable_elapsed / 1000.0f, pi_output_min_on_);
+        ESP_LOGD(TAG, "[HYST] Min-on: %.1fs / 30s – Heizung bleibt min_on=%.0f%%", stable_elapsed / 1000.0f, pi_output_min_on_);
         set_power_level_percent(pi_output_min_on_);
         time_entered_off_region_ = 0;
         return;
       }
       if (time_entered_off_region_ == 0) {
         time_entered_off_region_ = now;
-        ESP_LOGI(TAG, "[HYST] Timer start (%.0fs bis Abschalt). Heizung vorerst auf min_on=%.0f%%", pi_off_delay_, pi_output_min_on_);
+        ESP_LOGD(TAG, "[HYST] Timer start (%.0fs bis Abschalt). Heizung vorerst auf min_on=%.0f%%", pi_off_delay_, pi_output_min_on_);
         set_power_level_percent(pi_output_min_on_);
       } else {
         float elapsed_s = (now - time_entered_off_region_) / 1000.0f;
         if (elapsed_s >= pi_off_delay_) {
-          ESP_LOGI(TAG, "[HYST] Timer abgelaufen (%.1fs >= %.0fs) -> Heizung AUS", elapsed_s, pi_off_delay_);
+          ESP_LOGD(TAG, "[HYST] Timer abgelaufen (%.1fs >= %.0fs) -> Heizung AUS", elapsed_s, pi_off_delay_);
           turn_off();
           time_entered_off_region_ = 0;
         } else {
@@ -1032,13 +1032,13 @@ void SunsterHeater::handle_automatic_mode() {
     time_entered_off_region_ = 0;
 
     if (output_stepped >= pi_output_min_on_) {
-      ESP_LOGI(TAG, "[HYST] out_stepped=%.0f >= min_on=%.1f -> Ein-Zone, Leistung=%.0f%%", output_stepped, pi_output_min_on_, output_stepped);
+      ESP_LOGD(TAG, "[HYST] out_stepped=%.0f >= min_on=%.1f -> Ein-Zone, Leistung=%.0f%%", output_stepped, pi_output_min_on_, output_stepped);
       if (!heater_enabled_) {
         turn_on();
       }
       set_power_level_percent(output_stepped);
     } else {
-      ESP_LOGI(TAG, "[HYST] min_off <= out=%.1f < min_on -> Hysterese-Band, Heizung bleibt bei min_on=%.0f%%", output, pi_output_min_on_);
+      ESP_LOGD(TAG, "[HYST] min_off <= out=%.1f < min_on -> Hysterese-Band, Heizung bleibt bei min_on=%.0f%%", output, pi_output_min_on_);
       if (heater_enabled_) {
         set_power_level_percent(pi_output_min_on_);
       }
