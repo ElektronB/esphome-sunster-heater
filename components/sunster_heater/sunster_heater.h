@@ -2,6 +2,7 @@
 
 #include "esphome/core/component.h"
 #include "esphome/core/automation.h"
+#include "esphome/core/entity_base.h"
 #include "esphome/core/hal.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/text_sensor/text_sensor.h"
@@ -448,6 +449,7 @@ class SunsterHeaterPowerLevelNumber : public number::Number, public Component {
   float get_setup_priority() const override { return setup_priority::AFTER_CONNECTION; }
 
   void setup() override {
+    this->set_entity_category(esphome::ENTITY_CATEGORY_NONE);  // show in HA under Steuerelemente
     if (heater_) {
       float v = heater_->get_power_level_percent();
       if (std::isnan(v)) v = 10.0f;
@@ -659,6 +661,7 @@ class SunsterTargetTemperatureNumber : public number::Number, public Component {
   void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
   float get_setup_priority() const override { return setup_priority::AFTER_CONNECTION; }
   void setup() override {
+    this->set_entity_category(esphome::ENTITY_CATEGORY_NONE);  // show in HA under Steuerelemente
     if (heater_) {
       float v = heater_->get_target_temperature();
       if (std::isnan(v)) v = 20.0f;
@@ -784,6 +787,7 @@ class SunsterControlModeSelect : public select::Select, public Component {
   float get_setup_priority() const override { return setup_priority::AFTER_CONNECTION; }
 
   void setup() override {
+    this->set_entity_category(esphome::ENTITY_CATEGORY_NONE);  // show in HA under Steuerelemente
     if (heater_) {
       const char *mode = "Manual";
       if (heater_->is_automatic_mode()) mode = "Automatic";
