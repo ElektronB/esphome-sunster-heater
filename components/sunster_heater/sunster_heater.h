@@ -12,6 +12,7 @@
 #include "esphome/components/select/select.h"
 #include "esphome/components/switch/switch.h"
 #include "esphome/core/preferences.h"
+#include <cmath>
 #include <vector>
 
 namespace esphome {
@@ -121,8 +122,17 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   // Time component setter
   void set_time_component(time::RealTimeClock *time) { time_component_ = time; }
 
-  // Number component setter
+  // Number component setters (for publishing config to HA after load)
   void set_injected_per_pulse_number(number::Number *num) { injected_per_pulse_number_ = num; }
+  void set_power_level_number(number::Number *num) { power_level_number_ = num; }
+  void set_pi_kp_number(number::Number *num) { pi_kp_number_ = num; }
+  void set_pi_ki_number(number::Number *num) { pi_ki_number_ = num; }
+  void set_pi_kd_number(number::Number *num) { pi_kd_number_ = num; }
+  void set_pi_off_delay_number(number::Number *num) { pi_off_delay_number_ = num; }
+  void set_target_temperature_number(number::Number *num) { target_temperature_number_ = num; }
+  void set_pi_output_min_off_number(number::Number *num) { pi_output_min_off_number_ = num; }
+  void set_pi_output_min_on_number(number::Number *num) { pi_output_min_on_number_ = num; }
+  void set_control_mode_select(select::Select *sel) { control_mode_select_ = sel; }
 
   // External temperature sensor
   void set_external_temperature_sensor(sensor::Sensor *sensor) { external_temperature_sensor_ = sensor; }
@@ -213,6 +223,7 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   void load_fuel_consumption_data();
   void load_config_data();
   void save_config_data();
+  void publish_all_config_entities_();
   void check_daily_reset();
   uint32_t get_days_since_epoch();
 
@@ -297,6 +308,15 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   binary_sensor::BinarySensor *low_voltage_error_sensor_{nullptr};
   sensor::Sensor *pi_output_sensor_{nullptr};
   number::Number *injected_per_pulse_number_{nullptr};
+  number::Number *power_level_number_{nullptr};
+  number::Number *pi_kp_number_{nullptr};
+  number::Number *pi_ki_number_{nullptr};
+  number::Number *pi_kd_number_{nullptr};
+  number::Number *pi_off_delay_number_{nullptr};
+  number::Number *target_temperature_number_{nullptr};
+  number::Number *pi_output_min_off_number_{nullptr};
+  number::Number *pi_output_min_on_number_{nullptr};
+  select::Select *control_mode_select_{nullptr};
   float last_pi_output_{0.0f};
 };
 
@@ -309,6 +329,7 @@ class SunsterInjectedPerPulseNumber : public number::Number, public Component {
   void setup() override {
     if (heater_) {
       float v = heater_->get_injected_per_pulse();
+      if (std::isnan(v)) v = 0.022f;
       ESP_LOGI(TAG, "[SEND_HA] InjectedPerPulse = %.3f (setup)", v);
       this->publish_state(v);
     }
@@ -322,8 +343,10 @@ class SunsterInjectedPerPulseNumber : public number::Number, public Component {
     Component::loop();
     if (!heater_) return;
     uint32_t now = millis();
-    if (last_publish_ == 0u || (now - last_publish_ >= 15000u)) {
+    uint32_t interval = (now < 60000u) ? 3000u : 15000u;
+    if (last_publish_ == 0u || (now - last_publish_ >= interval)) {
       float v = heater_->get_injected_per_pulse();
+      if (std::isnan(v)) v = 0.022f;
       if (last_publish_ == 0u) ESP_LOGI(TAG, "[SEND_HA] InjectedPerPulse = %.3f (first loop)", v);
       last_publish_ = now;
       this->publish_state(v);
@@ -425,6 +448,7 @@ class SunsterHeaterPowerLevelNumber : public number::Number, public Component {
   void setup() override {
     if (heater_) {
       float v = heater_->get_power_level_percent();
+      if (std::isnan(v)) v = 10.0f;
       ESP_LOGI(TAG, "[SEND_HA] PowerLevel = %.1f (setup)", v);
       this->publish_state(v);
     }
@@ -438,8 +462,10 @@ class SunsterHeaterPowerLevelNumber : public number::Number, public Component {
     Component::loop();
     if (!heater_) return;
     uint32_t now = millis();
-    if (last_publish_ == 0u || (now - last_publish_ >= 15000u)) {
+    uint32_t interval = (now < 60000u) ? 3000u : 15000u;
+    if (last_publish_ == 0u || (now - last_publish_ >= interval)) {
       float v = heater_->get_power_level_percent();
+      if (std::isnan(v)) v = 10.0f;
       if (last_publish_ == 0u) ESP_LOGI(TAG, "[SEND_HA] PowerLevel = %.1f (first loop)", v);
       last_publish_ = now;
       this->publish_state(v);
@@ -469,6 +495,7 @@ class SunsterPiKpNumber : public number::Number, public Component {
   void setup() override {
     if (heater_) {
       float v = heater_->get_pi_kp();
+      if (std::isnan(v)) v = 6.0f;
       ESP_LOGI(TAG, "[SEND_HA] PI Kp = %.2f (setup)", v);
       this->publish_state(v);
     }
@@ -481,8 +508,10 @@ class SunsterPiKpNumber : public number::Number, public Component {
     Component::loop();
     if (!heater_) return;
     uint32_t now = millis();
-    if (last_publish_ == 0u || (now - last_publish_ >= 15000u)) {
+    uint32_t interval = (now < 60000u) ? 3000u : 15000u;
+    if (last_publish_ == 0u || (now - last_publish_ >= interval)) {
       float v = heater_->get_pi_kp();
+      if (std::isnan(v)) v = 6.0f;
       if (last_publish_ == 0u) ESP_LOGI(TAG, "[SEND_HA] PI Kp = %.2f (first loop)", v);
       last_publish_ = now;
       this->publish_state(v);
@@ -507,6 +536,7 @@ class SunsterPiKiNumber : public number::Number, public Component {
   void setup() override {
     if (heater_) {
       float v = heater_->get_pi_ki();
+      if (std::isnan(v)) v = 0.03f;
       ESP_LOGI(TAG, "[SEND_HA] PI Ki = %.2f (setup)", v);
       this->publish_state(v);
     }
@@ -519,8 +549,10 @@ class SunsterPiKiNumber : public number::Number, public Component {
     Component::loop();
     if (!heater_) return;
     uint32_t now = millis();
-    if (last_publish_ == 0u || (now - last_publish_ >= 15000u)) {
+    uint32_t interval = (now < 60000u) ? 3000u : 15000u;
+    if (last_publish_ == 0u || (now - last_publish_ >= interval)) {
       float v = heater_->get_pi_ki();
+      if (std::isnan(v)) v = 0.03f;
       if (last_publish_ == 0u) ESP_LOGI(TAG, "[SEND_HA] PI Ki = %.2f (first loop)", v);
       last_publish_ = now;
       this->publish_state(v);
@@ -545,6 +577,7 @@ class SunsterPiKdNumber : public number::Number, public Component {
   void setup() override {
     if (heater_) {
       float v = heater_->get_pi_kd();
+      if (std::isnan(v)) v = 2.0f;
       ESP_LOGI(TAG, "[SEND_HA] PI Kd = %.2f (setup)", v);
       this->publish_state(v);
     }
@@ -557,8 +590,10 @@ class SunsterPiKdNumber : public number::Number, public Component {
     Component::loop();
     if (!heater_) return;
     uint32_t now = millis();
-    if (last_publish_ == 0u || (now - last_publish_ >= 15000u)) {
+    uint32_t interval = (now < 60000u) ? 3000u : 15000u;
+    if (last_publish_ == 0u || (now - last_publish_ >= interval)) {
       float v = heater_->get_pi_kd();
+      if (std::isnan(v)) v = 2.0f;
       if (last_publish_ == 0u) ESP_LOGI(TAG, "[SEND_HA] PI Kd = %.2f (first loop)", v);
       last_publish_ = now;
       this->publish_state(v);
@@ -583,6 +618,7 @@ class SunsterPiOffDelayNumber : public number::Number, public Component {
   void setup() override {
     if (heater_) {
       float v = heater_->get_pi_off_delay();
+      if (std::isnan(v)) v = 60.0f;
       ESP_LOGI(TAG, "[SEND_HA] PI OffDelay = %.0f (setup)", v);
       this->publish_state(v);
     }
@@ -595,8 +631,10 @@ class SunsterPiOffDelayNumber : public number::Number, public Component {
     Component::loop();
     if (!heater_) return;
     uint32_t now = millis();
-    if (last_publish_ == 0u || (now - last_publish_ >= 15000u)) {
+    uint32_t interval = (now < 60000u) ? 3000u : 15000u;
+    if (last_publish_ == 0u || (now - last_publish_ >= interval)) {
       float v = heater_->get_pi_off_delay();
+      if (std::isnan(v)) v = 60.0f;
       if (last_publish_ == 0u) ESP_LOGI(TAG, "[SEND_HA] PI OffDelay = %.0f (first loop)", v);
       last_publish_ = now;
       this->publish_state(v);
@@ -621,6 +659,7 @@ class SunsterTargetTemperatureNumber : public number::Number, public Component {
   void setup() override {
     if (heater_) {
       float v = heater_->get_target_temperature();
+      if (std::isnan(v)) v = 20.0f;
       ESP_LOGI(TAG, "[SEND_HA] TargetTemp = %.1f (setup)", v);
       this->publish_state(v);
     }
@@ -633,8 +672,10 @@ class SunsterTargetTemperatureNumber : public number::Number, public Component {
     Component::loop();
     if (!heater_) return;
     uint32_t now = millis();
-    if (last_publish_ == 0u || (now - last_publish_ >= 15000u)) {
+    uint32_t interval = (now < 60000u) ? 3000u : 15000u;
+    if (last_publish_ == 0u || (now - last_publish_ >= interval)) {
       float v = heater_->get_target_temperature();
+      if (std::isnan(v)) v = 20.0f;
       if (last_publish_ == 0u) ESP_LOGI(TAG, "[SEND_HA] TargetTemp = %.1f (first loop)", v);
       last_publish_ = now;
       this->publish_state(v);
@@ -659,6 +700,7 @@ class SunsterPiOutputMinOffNumber : public number::Number, public Component {
   void setup() override {
     if (heater_) {
       float v = heater_->get_pi_output_min_off();
+      if (std::isnan(v)) v = 3.0f;
       ESP_LOGI(TAG, "[SEND_HA] PI MinOff = %.1f (setup)", v);
       this->publish_state(v);
     }
@@ -671,8 +713,10 @@ class SunsterPiOutputMinOffNumber : public number::Number, public Component {
     Component::loop();
     if (!heater_) return;
     uint32_t now = millis();
-    if (last_publish_ == 0u || (now - last_publish_ >= 15000u)) {
+    uint32_t interval = (now < 60000u) ? 3000u : 15000u;
+    if (last_publish_ == 0u || (now - last_publish_ >= interval)) {
       float v = heater_->get_pi_output_min_off();
+      if (std::isnan(v)) v = 3.0f;
       if (last_publish_ == 0u) ESP_LOGI(TAG, "[SEND_HA] PI MinOff = %.1f (first loop)", v);
       last_publish_ = now;
       this->publish_state(v);
@@ -697,6 +741,7 @@ class SunsterPiOutputMinOnNumber : public number::Number, public Component {
   void setup() override {
     if (heater_) {
       float v = heater_->get_pi_output_min_on();
+      if (std::isnan(v)) v = 15.0f;
       ESP_LOGI(TAG, "[SEND_HA] PI MinOn = %.1f (setup)", v);
       this->publish_state(v);
     }
@@ -709,8 +754,10 @@ class SunsterPiOutputMinOnNumber : public number::Number, public Component {
     Component::loop();
     if (!heater_) return;
     uint32_t now = millis();
-    if (last_publish_ == 0u || (now - last_publish_ >= 15000u)) {
+    uint32_t interval = (now < 60000u) ? 3000u : 15000u;
+    if (last_publish_ == 0u || (now - last_publish_ >= interval)) {
       float v = heater_->get_pi_output_min_on();
+      if (std::isnan(v)) v = 15.0f;
       if (last_publish_ == 0u) ESP_LOGI(TAG, "[SEND_HA] PI MinOn = %.1f (first loop)", v);
       last_publish_ = now;
       this->publish_state(v);
@@ -764,7 +811,8 @@ class SunsterControlModeSelect : public select::Select, public Component {
     Component::loop();
     if (!heater_) return;
     uint32_t now = millis();
-    if (last_mode_publish_ == 0u || (now - last_mode_publish_ >= 15000u)) {
+    uint32_t interval = (now < 60000u) ? 3000u : 15000u;
+    if (last_mode_publish_ == 0u || (now - last_mode_publish_ >= interval)) {
       if (last_mode_publish_ == 0u) {
         const char *mode = "Manual";
         if (heater_->is_automatic_mode()) mode = "Automatic";

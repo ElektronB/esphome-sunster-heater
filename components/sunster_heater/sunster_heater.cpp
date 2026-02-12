@@ -55,7 +55,8 @@ void SunsterHeater::setup() {
   // Load persisted config (PI, target temp, hysteresis, injected_per_pulse)
   this->pref_config_ = global_preferences->make_preference<HeaterConfigData>(fnv1_hash("heater_config"));
   load_config_data();
-  
+  publish_all_config_entities_();
+
   // Initialize hourly consumption sensor with initial value
   if (hourly_consumption_sensor_) {
     hourly_consumption_sensor_->publish_state(0.0f);
@@ -609,7 +610,7 @@ void SunsterHeater::load_config_data() {
   if (pref_config_.load(&data)) {
     ESP_LOGI(TAG, "[CONFIG] Flash preference loaded, version=%u", data.version);
     if (data.version == 3) {
-      if (std::isnan(data.pi_kp) || std::isnan(data.pi_ki) || std::isnan(data.target_temperature)) {
+      if (std::isnan(data.pi_kp) || std::isnan(data.pi_ki) || std::isnan(data.pi_kd) || std::isnan(data.target_temperature)) {
          ESP_LOGW(TAG, "[CONFIG] Loaded data has NAN, using defaults");
          save_config_data();
          return;
@@ -651,6 +652,64 @@ void SunsterHeater::save_config_data() {
     ESP_LOGD(TAG, "Config preferences saved");
   } else {
     ESP_LOGW(TAG, "Failed to save config preferences");
+  }
+}
+
+void SunsterHeater::publish_all_config_entities_() {
+  auto sanitize = [](float v, float def) { return std::isnan(v) ? def : v; };
+  if (injected_per_pulse_number_) {
+    float v = sanitize(injected_per_pulse_, 0.022f);
+    injected_per_pulse_number_->publish_state(v);
+    ESP_LOGD(TAG, "[CONFIG] push InjectedPerPulse = %.3f", v);
+  }
+  if (power_level_number_) {
+    float v = sanitize(get_power_level_percent(), 10.0f);
+    power_level_number_->publish_state(v);
+    ESP_LOGD(TAG, "[CONFIG] push PowerLevel = %.1f", v);
+  }
+  if (pi_kp_number_) {
+    float v = sanitize(pi_kp_, 6.0f);
+    pi_kp_number_->publish_state(v);
+    ESP_LOGD(TAG, "[CONFIG] push PI Kp = %.2f", v);
+  }
+  if (pi_ki_number_) {
+    float v = sanitize(pi_ki_, 0.03f);
+    pi_ki_number_->publish_state(v);
+    ESP_LOGD(TAG, "[CONFIG] push PI Ki = %.2f", v);
+  }
+  if (pi_kd_number_) {
+    float v = sanitize(pi_kd_, 2.0f);
+    pi_kd_number_->publish_state(v);
+    ESP_LOGD(TAG, "[CONFIG] push PI Kd = %.2f", v);
+  }
+  if (pi_off_delay_number_) {
+    float v = sanitize(pi_off_delay_, 60.0f);
+    pi_off_delay_number_->publish_state(v);
+    ESP_LOGD(TAG, "[CONFIG] push PI OffDelay = %.0f", v);
+  }
+  if (target_temperature_number_) {
+    float v = sanitize(target_temperature_, 20.0f);
+    target_temperature_number_->publish_state(v);
+    ESP_LOGD(TAG, "[CONFIG] push TargetTemp = %.1f", v);
+  }
+  if (pi_output_min_off_number_) {
+    float v = sanitize(pi_output_min_off_, 3.0f);
+    pi_output_min_off_number_->publish_state(v);
+    ESP_LOGD(TAG, "[CONFIG] push PI MinOff = %.1f", v);
+  }
+  if (pi_output_min_on_number_) {
+    float v = sanitize(pi_output_min_on_, 15.0f);
+    pi_output_min_on_number_->publish_state(v);
+    ESP_LOGD(TAG, "[CONFIG] push PI MinOn = %.1f", v);
+  }
+  if (control_mode_select_) {
+    const char *mode = "Manual";
+    if (is_automatic_mode())
+      mode = "Automatic";
+    else if (is_antifreeze_mode())
+      mode = "Antifreeze";
+    control_mode_select_->publish_state(mode);
+    ESP_LOGD(TAG, "[CONFIG] push ControlMode = %s", mode);
   }
 }
 

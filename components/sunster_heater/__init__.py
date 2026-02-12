@@ -409,6 +409,8 @@ async def to_code(config):
     cg.add(var.set_target_temperature(config["target_temperature"]))
     cg.add(var.set_pi_kp(config["pi_kp"]))
     cg.add(var.set_pi_ki(config["pi_ki"]))
+    cg.add(var.set_pi_kd(config["pi_kd"]))
+    cg.add(var.set_pi_off_delay(config["pi_off_delay"]))
     cg.add(var.set_pi_output_min_off(config["pi_output_min_off"]))
     cg.add(var.set_pi_output_min_on(config["pi_output_min_on"]))
 
@@ -525,6 +527,7 @@ async def to_code(config):
             options=["Manual", "Automatic", "Antifreeze"]
         )
         cg.add(sel.set_sunster_heater(var))
+        cg.add(var.set_control_mode_select(sel))
 
     # Switch component for heater power
     if CONF_POWER_SWITCH in config:
@@ -536,33 +539,41 @@ async def to_code(config):
         num_config = config[CONF_POWER_LEVEL_NUMBER]
         num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
         cg.add(num.set_sunster_heater(var))
+        cg.add(var.set_power_level_number(num))
 
     # Number components for Automatic mode (PI controller, target temp, hysteresis)
     if CONF_PI_KP_NUMBER in config:
         num_config = config[CONF_PI_KP_NUMBER]
         num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
         cg.add(num.set_sunster_heater(var))
+        cg.add(var.set_pi_kp_number(num))
     if CONF_PI_KI_NUMBER in config:
         num_config = config[CONF_PI_KI_NUMBER]
         num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
         cg.add(num.set_sunster_heater(var))
+        cg.add(var.set_pi_ki_number(num))
     if CONF_PI_KD_NUMBER in config:
         num_config = config[CONF_PI_KD_NUMBER]
         num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
         cg.add(num.set_sunster_heater(var))
+        cg.add(var.set_pi_kd_number(num))
     if CONF_PI_OFF_DELAY_NUMBER in config:
         num_config = config[CONF_PI_OFF_DELAY_NUMBER]
         num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
         cg.add(num.set_sunster_heater(var))
+        cg.add(var.set_pi_off_delay_number(num))
     if CONF_TARGET_TEMPERATURE_NUMBER in config:
         num_config = config[CONF_TARGET_TEMPERATURE_NUMBER]
         num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
         cg.add(num.set_sunster_heater(var))
+        cg.add(var.set_target_temperature_number(num))
     if CONF_PI_OUTPUT_MIN_OFF_NUMBER in config:
         num_config = config[CONF_PI_OUTPUT_MIN_OFF_NUMBER]
         num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
         cg.add(num.set_sunster_heater(var))
+        cg.add(var.set_pi_output_min_off_number(num))
     if CONF_PI_OUTPUT_MIN_ON_NUMBER in config:
         num_config = config[CONF_PI_OUTPUT_MIN_ON_NUMBER]
         num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
         cg.add(num.set_sunster_heater(var))
+        cg.add(var.set_pi_output_min_on_number(num))
