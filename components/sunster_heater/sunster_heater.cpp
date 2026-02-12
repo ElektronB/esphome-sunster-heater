@@ -1272,7 +1272,9 @@ bool SunsterHeater::turn_on() {
 
 void SunsterHeater::turn_off() {
   heater_enabled_ = false;
-  ESP_LOGI(TAG, "Heater turned OFF");
+  // Leistung nicht auf 0 setzen, damit Restart im Automatikmodus funktioniert
+  // power_level_ bleibt erhalten (wird beim turn_on() auf default_power_percent_ gesetzt)
+  ESP_LOGI(TAG, "Heater turned OFF (power_level bleibt bei %d = %.0f%%)", power_level_, power_level_ * 10.0f);
 }
 
 void SunsterHeater::set_power_level_percent(float percent) {
