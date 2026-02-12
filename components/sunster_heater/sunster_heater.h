@@ -157,8 +157,8 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   void set_low_voltage_error_sensor(binary_sensor::BinarySensor *sensor) { low_voltage_error_sensor_ = sensor; }
   void set_pi_output_sensor(sensor::Sensor *sensor) { pi_output_sensor_ = sensor; }
 
-  // Control methods
-  void turn_on();
+  // Control methods (turn_on returns false if start rejected, e.g. Soll < Ist in automatic mode)
+  bool turn_on();
   void turn_off();
   void set_power_level_percent(float percent);
   void reset_daily_consumption();
@@ -485,12 +485,14 @@ class SunsterHeaterPowerSwitch : public switch_::Switch, public Component {
     if (heater_) {
       heater_->set_automatic_master_enabled(state);
       if (state) {
-        heater_->turn_on();
+        bool ok = heater_->turn_on();
+        this->publish_state(ok);
+        last_published_state_ = ok;
       } else {
         heater_->turn_off();
+        this->publish_state(state);
+        last_published_state_ = state;
       }
-      this->publish_state(state);
-      last_published_state_ = state;
       if (heater_->is_state_synced_once()) {
         last_sync_publish_ = millis();
       }

@@ -1178,12 +1178,21 @@ void SunsterHeater::set_control_mode(ControlMode mode) {
   ESP_LOGI(TAG, "Control mode changed from %d to %d", (int)old_mode, (int)mode);
 }
 
-void SunsterHeater::turn_on() {
+bool SunsterHeater::turn_on() {
   // Check if automatic mode requires external sensor
   if (control_mode_ == ControlMode::AUTOMATIC) {
     if (!has_external_sensor()) {
       ESP_LOGE(TAG, "Cannot turn on heater: automatic mode requires external temperature sensor!");
-      return;
+      return false;
+    }
+    // Im Automatikmodus: Heizung nicht starten wenn Soll < Ist (nur PID aktiv für Hysterese)
+    // Ausnahme: während Autotune darf die Heizung starten
+    if (autotune_state_ != AutotuneState::AUTOTUNE_RUNNING &&
+        !std::isnan(external_temperature_) && external_temperature_ >= -50.0f && external_temperature_ <= 100.0f &&
+        target_temperature_ < external_temperature_) {
+      ESP_LOGW(TAG, "Heater start blocked: Soll (%.1f°C) < Ist (%.1f°C), PID stays active for hysteresis",
+               target_temperature_, external_temperature_);
+      return false;
     }
   }
   
@@ -1196,13 +1205,14 @@ void SunsterHeater::turn_on() {
     if (low_voltage_error_sensor_) {
       low_voltage_error_sensor_->publish_state(true);
     }
-    return;
+    return false;
   }
   
   heater_enabled_ = true;
   // Set to default power level on turn on
   power_level_ = static_cast<uint8_t>(default_power_percent_ / 10.0f);
   ESP_LOGI(TAG, "Heater turned ON at %.0f%% power", default_power_percent_);
+  return true;
 }
 
 void SunsterHeater::turn_off() {
