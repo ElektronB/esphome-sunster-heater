@@ -8,6 +8,10 @@
 #include <cinttypes>
 #include <ctime>
 #include <string>
+#include <cmath>
+#ifndef M_PI
+#define M_PI 3.1415926535897932384626433832795
+#endif
 
 namespace esphome {
 namespace sunster_heater {
@@ -99,16 +103,21 @@ void SunsterHeater::update() {
   // Check voltage safety
   check_voltage_safety();
   
-  // Handle automatic mode (PI controller)
-  if (control_mode_ == ControlMode::AUTOMATIC) {
-    handle_automatic_mode();
-  } else if (pi_output_sensor_) {
-    last_pi_output_ = 0.0f;
-    pi_output_sensor_->publish_state(0.0f);
-  }
-  // Handle antifreeze mode logic
-  if (control_mode_ == ControlMode::ANTIFREEZE) {
-    handle_antifreeze_mode();
+  // Handle autotune if running (takes precedence over normal modes)
+  if (autotune_state_ == AutotuneState::AUTOTUNE_RUNNING) {
+    handle_autotune();
+  } else {
+    // Handle automatic mode (PI controller)
+    if (control_mode_ == ControlMode::AUTOMATIC) {
+      handle_automatic_mode();
+    } else if (pi_output_sensor_) {
+      last_pi_output_ = 0.0f;
+      pi_output_sensor_->publish_state(0.0f);
+    }
+    // Handle antifreeze mode logic
+    if (control_mode_ == ControlMode::ANTIFREEZE) {
+      handle_antifreeze_mode();
+    }
   }
   
   // Always check for incoming data, regardless of state
@@ -339,7 +348,7 @@ void SunsterHeater::send_controller_frame() {
   // Send frame
   this->write_array(frame.data(), frame.size());
   
-  ESP_LOGD(TAG, "Sent controller frame: enabled=%s, power=%d, state=0x%02X", 
+  ESP_LOGV(TAG, "Sent controller frame: enabled=%s, power=%d, state=0x%02X", 
            YESNO(heater_enabled_), power_level_, frame[9]);
 }
 
@@ -1190,6 +1199,217 @@ void SunsterHeater::dump_config() {
   LOG_SENSOR("  ", "Daily Consumption", daily_consumption_sensor_);
   LOG_SENSOR("  ", "Total Consumption", total_consumption_sensor_);
   LOG_BINARY_SENSOR("  ", "Low Voltage Error", low_voltage_error_sensor_);
+}
+
+void SunsterHeater::start_autotune() {
+  // Check prerequisites
+  if (external_temperature_sensor_ == nullptr || !external_temperature_sensor_->has_state()) {
+    ESP_LOGE(TAG, "[AUTOTUNE] Cannot start: external temperature sensor not available");
+    autotune_state_ = AutotuneState::AUTOTUNE_FAILED;
+    return;
+  }
+  
+  if (std::isnan(target_temperature_) || target_temperature_ <= 0.0f) {
+    ESP_LOGE(TAG, "[AUTOTUNE] Cannot start: target temperature not set");
+    autotune_state_ = AutotuneState::AUTOTUNE_FAILED;
+    return;
+  }
+  
+  // Force automatic mode for autotune
+  if (control_mode_ != ControlMode::AUTOMATIC) {
+    ESP_LOGI(TAG, "[AUTOTUNE] Switching to automatic mode for autotune");
+    set_control_mode(ControlMode::AUTOMATIC);
+  }
+  
+  // Initialize autotune state
+  autotune_state_ = AutotuneState::AUTOTUNE_RUNNING;
+  autotune_start_time_ms_ = millis();
+  autotune_current_phase_ = AutotunePhase::AUTOTUNE_PHASE_STARTING;
+  autotune_relay_heating_ = false;
+  autotune_subphase_start_ms_ = millis();
+  autotune_zc_times_.clear();
+  autotune_amplitudes_.clear();
+  autotune_phase_min_ = external_temperature_;
+  autotune_phase_max_ = external_temperature_;
+  
+  ESP_LOGI(TAG, "[AUTOTUNE] Started: target=%.1f°C, high_percent=%.0f%%, max_duration=%dmin, min_zc=%d",
+           target_temperature_, autotune_high_percent_, autotune_max_duration_ms_ / 60000, autotune_min_zc_);
+}
+
+void SunsterHeater::stop_autotune() {
+  if (autotune_state_ == AutotuneState::AUTOTUNE_RUNNING) {
+    ESP_LOGI(TAG, "[AUTOTUNE] Stopped by user");
+    autotune_state_ = AutotuneState::AUTOTUNE_OFF;
+    // Turn off heater if it was started by autotune
+    if (heater_enabled_) {
+      turn_off();
+    }
+  }
+}
+
+void SunsterHeater::handle_autotune() {
+  uint32_t now = millis();
+  
+  // Check timeout
+  if ((now - autotune_start_time_ms_) > autotune_max_duration_ms_) {
+    ESP_LOGW(TAG, "[AUTOTUNE] Timeout after %d minutes", autotune_max_duration_ms_ / 60000);
+    autotune_state_ = AutotuneState::AUTOTUNE_FAILED;
+    return;
+  }
+  
+  // Check sensor availability
+  if (external_temperature_sensor_ == nullptr || !external_temperature_sensor_->has_state()) {
+    ESP_LOGW(TAG, "[AUTOTUNE] Sensor lost, aborting");
+    autotune_state_ = AutotuneState::AUTOTUNE_FAILED;
+    return;
+  }
+  
+  // State machine for sub-phases
+  switch (autotune_current_phase_) {
+    case AutotunePhase::AUTOTUNE_PHASE_STARTING: {
+      // Start heater if not already running
+      if (!heater_enabled_) {
+        turn_on();
+        set_power_level_percent(autotune_high_percent_);
+        autotune_subphase_start_ms_ = now;
+        ESP_LOGI(TAG, "[AUTOTUNE] Phase STARTING: Turning on heater at %.0f%%", autotune_high_percent_);
+      }
+      
+      // Wait for stable combustion and minimum start time
+      if (current_state_ == HeaterState::STABLE_COMBUSTION &&
+          (now - autotune_subphase_start_ms_) >= AUTOTUNE_START_TIME_MS) {
+        autotune_current_phase_ = AutotunePhase::AUTOTUNE_PHASE_HEATING;
+        autotune_subphase_start_ms_ = now;
+        autotune_phase_min_ = external_temperature_;
+        autotune_phase_max_ = external_temperature_;
+        autotune_relay_heating_ = true;
+        ESP_LOGI(TAG, "[AUTOTUNE] Phase HEATING: Starting temperature measurement (target=%.1f°C)", target_temperature_);
+      }
+      break;
+    }
+    
+    case AutotunePhase::AUTOTUNE_PHASE_HEATING: {
+      // Measure temperature during heating phase
+      autotune_phase_min_ = std::min(autotune_phase_min_, external_temperature_);
+      autotune_phase_max_ = std::max(autotune_phase_max_, external_temperature_);
+      
+      // After heating duration, move to stopping
+      if ((now - autotune_subphase_start_ms_) >= AUTOTUNE_HEATING_DURATION_MS) {
+        float amplitude = autotune_phase_max_ - autotune_phase_min_;
+        autotune_amplitudes_.push_back(amplitude);
+        ESP_LOGI(TAG, "[AUTOTUNE] Phase HEATING complete: temp range %.1f-%.1f°C, amplitude=%.2f°C",
+                 autotune_phase_min_, autotune_phase_max_, amplitude);
+        
+        autotune_current_phase_ = AutotunePhase::AUTOTUNE_PHASE_STOPPING;
+        autotune_subphase_start_ms_ = now;
+        turn_off();
+        ESP_LOGI(TAG, "[AUTOTUNE] Phase STOPPING: Turning off heater");
+      }
+      break;
+    }
+    
+    case AutotunePhase::AUTOTUNE_PHASE_STOPPING: {
+      // Wait for heater to stop and minimum stop time
+      if (current_state_ == HeaterState::OFF &&
+          (now - autotune_subphase_start_ms_) >= AUTOTUNE_STOP_TIME_MS) {
+        // Zero-crossing: temperature peak reached
+        autotune_zc_times_.push_back(now);
+        ESP_LOGI(TAG, "[AUTOTUNE] Zero-crossing #%zu at temperature peak (%.1f°C)",
+                 autotune_zc_times_.size(), external_temperature_);
+        
+        autotune_current_phase_ = AutotunePhase::AUTOTUNE_PHASE_COOLING;
+        autotune_subphase_start_ms_ = now;
+        autotune_phase_min_ = external_temperature_;
+        autotune_phase_max_ = external_temperature_;
+        autotune_relay_heating_ = false;
+        ESP_LOGI(TAG, "[AUTOTUNE] Phase COOLING: Starting temperature measurement");
+      }
+      break;
+    }
+    
+    case AutotunePhase::AUTOTUNE_PHASE_COOLING: {
+      // Measure temperature during cooling phase
+      autotune_phase_min_ = std::min(autotune_phase_min_, external_temperature_);
+      autotune_phase_max_ = std::max(autotune_phase_max_, external_temperature_);
+      
+      // After cooling duration, check if we have enough data
+      if ((now - autotune_subphase_start_ms_) >= AUTOTUNE_COOLING_DURATION_MS) {
+        float amplitude = autotune_phase_max_ - autotune_phase_min_;
+        autotune_amplitudes_.push_back(amplitude);
+        ESP_LOGI(TAG, "[AUTOTUNE] Phase COOLING complete: temp range %.1f-%.1f°C, amplitude=%.2f°C",
+                 autotune_phase_min_, autotune_phase_max_, amplitude);
+        
+        // Zero-crossing: temperature valley reached
+        autotune_zc_times_.push_back(now);
+        ESP_LOGI(TAG, "[AUTOTUNE] Zero-crossing #%zu at temperature valley (%.1f°C)",
+                 autotune_zc_times_.size(), external_temperature_);
+        
+        // Check if we have enough zero-crossings
+        if (autotune_zc_times_.size() >= autotune_min_zc_) {
+          // Calculate PID parameters using Ziegler-Nichols
+          if (autotune_amplitudes_.size() >= 2) {
+            // Calculate mean amplitude
+            float mean_amplitude = 0.0f;
+            for (float amp : autotune_amplitudes_) {
+              mean_amplitude += amp;
+            }
+            mean_amplitude /= autotune_amplitudes_.size();
+            
+            // Calculate mean oscillation period P_u (in seconds)
+            float mean_period = 0.0f;
+            if (autotune_zc_times_.size() >= 2) {
+              for (size_t i = 1; i < autotune_zc_times_.size(); ++i) {
+                mean_period += (autotune_zc_times_[i] - autotune_zc_times_[i-1]) / 1000.0f;
+              }
+              mean_period /= (autotune_zc_times_.size() - 1);
+            }
+            
+            // Calculate K_u = 4*d / (π*a)
+            // d = relay magnitude = autotune_high_percent_ / 2 (since we go from 0% to high_percent%)
+            float d = autotune_high_percent_ / 2.0f;
+            float ku = (4.0f * d) / (M_PI * mean_amplitude);
+            
+            // Ziegler-Nichols PID parameters
+            float kp = 0.6f * ku;
+            float ki = 1.2f * ku / mean_period;
+            float kd = 0.075f * ku * mean_period;
+            
+            ESP_LOGI(TAG, "[AUTOTUNE] Calculation complete:");
+            ESP_LOGI(TAG, "  Mean amplitude: %.2f°C", mean_amplitude);
+            ESP_LOGI(TAG, "  Mean period: %.1fs", mean_period);
+            ESP_LOGI(TAG, "  K_u: %.2f", ku);
+            ESP_LOGI(TAG, "  Calculated PID: Kp=%.2f Ki=%.5f Kd=%.2f", kp, ki, kd);
+            
+            // Apply parameters
+            pi_kp_ = kp;
+            pi_ki_ = ki;
+            pi_kd_ = kd;
+            
+            // Save to preferences
+            save_config_data();
+            
+            // Publish to HA number entities
+            if (pi_kp_number_) pi_kp_number_->publish_state(kp);
+            if (pi_ki_number_) pi_ki_number_->publish_state(ki);
+            if (pi_kd_number_) pi_kd_number_->publish_state(kd);
+            
+            ESP_LOGI(TAG, "[AUTOTUNE] SUCCEEDED: PID parameters applied and saved");
+            autotune_state_ = AutotuneState::AUTOTUNE_SUCCEEDED;
+          } else {
+            ESP_LOGW(TAG, "[AUTOTUNE] Not enough amplitude data");
+            autotune_state_ = AutotuneState::AUTOTUNE_FAILED;
+          }
+        } else {
+          // Start next cycle
+          autotune_current_phase_ = AutotunePhase::AUTOTUNE_PHASE_STARTING;
+          autotune_subphase_start_ms_ = now;
+          ESP_LOGI(TAG, "[AUTOTUNE] Starting next cycle (%zu/%d zero-crossings)",
+                   autotune_zc_times_.size(), autotune_min_zc_);
+        }
+      }
+      break;
+    }
+  }
 }
 
 }  // namespace sunster_heater

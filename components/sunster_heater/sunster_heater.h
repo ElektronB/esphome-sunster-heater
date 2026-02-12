@@ -108,6 +108,9 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   void set_pi_off_delay(float delay_s) { pi_off_delay_ = delay_s; }
   void set_pi_output_min_off(float v) { pi_output_min_off_ = v; }
   void set_pi_output_min_on(float v) { pi_output_min_on_ = v; }
+  void set_autotune_high_percent(float percent) { autotune_high_percent_ = percent; }
+  void set_autotune_max_duration_min(uint32_t minutes) { autotune_max_duration_ms_ = minutes * 60000UL; }
+  void set_autotune_min_zero_crossings(uint8_t zc) { autotune_min_zc_ = zc; }
 
   float get_target_temperature() const { return target_temperature_; }
   float get_power_level_percent() const { return power_level_ * 10.0f; }
@@ -160,6 +163,17 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   void set_power_level_percent(float percent);
   void reset_daily_consumption();
   void reset_total_consumption();
+
+  // Autotune methods
+  void start_autotune();
+  void stop_autotune();
+  enum class AutotuneState {
+    AUTOTUNE_OFF,
+    AUTOTUNE_RUNNING,
+    AUTOTUNE_SUCCEEDED,
+    AUTOTUNE_FAILED
+  };
+  AutotuneState get_autotune_state() const { return autotune_state_; }
 
   // Control mode management
   bool is_automatic_mode() const { return control_mode_ == ControlMode::AUTOMATIC; }
@@ -217,6 +231,7 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   void check_voltage_safety();
   void handle_antifreeze_mode();
   void handle_automatic_mode();
+  void handle_autotune();
 
   // Fuel consumption tracking
   void update_fuel_consumption(float pump_frequency);
@@ -273,6 +288,12 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   static constexpr uint32_t PI_MIN_ON_TIME_MS = 30000;  // 30s min on after stable combustion
   static constexpr uint32_t PI_SENSOR_GRACE_PERIOD_MS = 600000;  // 600s grace period for sensor loss
 
+  // Autotune constants
+  static constexpr uint32_t AUTOTUNE_START_TIME_MS = 120000;  // 120s start time
+  static constexpr uint32_t AUTOTUNE_STOP_TIME_MS = 120000;  // 120s stop time
+  static constexpr uint32_t AUTOTUNE_HEATING_DURATION_MS = 300000;  // 300s = 5min heating
+  static constexpr uint32_t AUTOTUNE_COOLING_DURATION_MS = 300000;  // 300s = 5min cooling
+
   // Parsed sensor values
   float current_temperature_{0.0};
   float external_temperature_{NAN};
@@ -323,6 +344,26 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   number::Number *pi_output_min_on_number_{nullptr};
   select::Select *control_mode_select_{nullptr};
   float last_pi_output_{0.0f};
+
+  // Autotune state
+  enum class AutotunePhase {
+    AUTOTUNE_PHASE_STARTING,
+    AUTOTUNE_PHASE_HEATING,
+    AUTOTUNE_PHASE_STOPPING,
+    AUTOTUNE_PHASE_COOLING
+  };
+  AutotuneState autotune_state_{AutotuneState::AUTOTUNE_OFF};
+  AutotunePhase autotune_current_phase_{AutotunePhase::AUTOTUNE_PHASE_STARTING};
+  bool autotune_relay_heating_{false};
+  uint32_t autotune_start_time_ms_{0};
+  uint32_t autotune_subphase_start_ms_{0};
+  float autotune_high_percent_{80.0f};
+  uint32_t autotune_max_duration_ms_{5400000};  // 90 minutes default
+  uint8_t autotune_min_zc_{4};
+  std::vector<uint32_t> autotune_zc_times_;
+  std::vector<float> autotune_amplitudes_;
+  float autotune_phase_min_{0.0f};
+  float autotune_phase_max_{0.0f};
 };
 
 // Number component for injected per pulse configuration
@@ -381,6 +422,24 @@ class SunsterResetTotalConsumptionButton : public button::Button, public Compone
   void press_action() override {
     if (heater_) {
       heater_->reset_total_consumption();
+    }
+  }
+
+  SunsterHeater *heater_{nullptr};
+};
+
+// Button component for PID autotune
+class SunsterPidAutotuneButton : public button::Button, public Component {
+ public:
+  void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
+  void dump_config() override {
+    LOG_BUTTON("", "Sunster Heater PID Autotune", this);
+  }
+
+ protected:
+  void press_action() override {
+    if (heater_) {
+      heater_->start_autotune();
     }
   }
 
