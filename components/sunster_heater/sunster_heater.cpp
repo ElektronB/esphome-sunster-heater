@@ -604,13 +604,13 @@ void SunsterHeater::load_fuel_consumption_data() {
 }
 
 void SunsterHeater::load_config_data() {
-  ESP_LOGI(TAG, "Loading config. Current (YAML) defaults: Kp=%.2f Ki=%.2f Kd=%.2f Target=%.1f", pi_kp_, pi_ki_, pi_kd_, target_temperature_);
+  ESP_LOGI(TAG, "[CONFIG] Reading from flash... (YAML defaults before load: Kp=%.2f Ki=%.2f Kd=%.2f Target=%.1f)", pi_kp_, pi_ki_, pi_kd_, target_temperature_);
   HeaterConfigData data;
   if (pref_config_.load(&data)) {
-    ESP_LOGI(TAG, "Preference loaded. Version: %u", data.version);
+    ESP_LOGI(TAG, "[CONFIG] Flash preference loaded, version=%u", data.version);
     if (data.version == 3) {
       if (std::isnan(data.pi_kp) || std::isnan(data.pi_ki) || std::isnan(data.target_temperature)) {
-         ESP_LOGW(TAG, "Loaded config contains NAN values! forcing defaults.");
+         ESP_LOGW(TAG, "[CONFIG] Loaded data has NAN, using defaults");
          save_config_data();
          return;
       }
@@ -622,16 +622,18 @@ void SunsterHeater::load_config_data() {
       pi_output_min_on_ = data.pi_output_min_on;
       injected_per_pulse_ = data.injected_per_pulse;
       pi_off_delay_ = data.pi_off_delay;
-      ESP_LOGI(TAG, "Loaded persisted config: Kp=%.2f Ki=%.2f Kd=%.2f target=%.1f°C hyst=%.0f/%.0f%% inj=%.3f delay=%.0fs",
+      ESP_LOGI(TAG, "[CONFIG] After boot (from flash): Kp=%.2f Ki=%.2f Kd=%.2f target=%.1f hyst=%.0f/%.0f inj=%.3f delay=%.0fs",
                pi_kp_, pi_ki_, pi_kd_, target_temperature_, pi_output_min_off_, pi_output_min_on_, injected_per_pulse_, pi_off_delay_);
     } else {
-      ESP_LOGW(TAG, "Config version mismatch (found %u, expected 3). Using defaults.", data.version);
+      ESP_LOGW(TAG, "[CONFIG] Version mismatch (got %u), using YAML defaults", data.version);
       save_config_data();
     }
   } else {
-    ESP_LOGI(TAG, "No persisted config found, using YAML defaults");
+    ESP_LOGI(TAG, "[CONFIG] No flash data, using YAML defaults");
     save_config_data();
   }
+  ESP_LOGI(TAG, "[CONFIG] Values that will be sent to HA: Kp=%.2f Ki=%.2f Kd=%.2f target=%.1f delay=%.0fs min_off=%.0f min_on=%.0f inj=%.3f",
+           pi_kp_, pi_ki_, pi_kd_, target_temperature_, pi_off_delay_, pi_output_min_off_, pi_output_min_on_, injected_per_pulse_);
 }
 
 void SunsterHeater::save_config_data() {
@@ -857,6 +859,9 @@ void SunsterHeater::handle_automatic_mode() {
     pi_output_sensor_->publish_state(output);
   }
 
+  ESP_LOGI(TAG, "[PID] soll=%.1f ist=%.1f out=%.1f out_stepped=%.0f enabled=%s",
+           target_temperature_, external_temperature_, output, output_stepped, heater_enabled_ ? "ON" : "OFF");
+
   if (!automatic_master_enabled_) {
     // Power switch (van_heizung_heizung_ein_aus) is OFF – PI must not turn on
     if (heater_enabled_) {
@@ -866,22 +871,24 @@ void SunsterHeater::handle_automatic_mode() {
   }
   
   if (output < pi_output_min_off_) {
-    // Output is below turn-off threshold
+    // Output is below turn-off threshold (Aus-Zone)
+    ESP_LOGI(TAG, "[HYST] out=%.1f < min_off=%.1f -> Aus-Zone", output, pi_output_min_off_);
     if (heater_enabled_) {
       // Check if we need to start the timer
       if (time_entered_off_region_ == 0) {
         time_entered_off_region_ = now;
-        ESP_LOGD(TAG, "PI output %.1f%% < min off %.1f%%. Starting off-timer (wait %.0fs)", 
-                 output, pi_output_min_off_, pi_off_delay_);
+        ESP_LOGI(TAG, "[HYST] Timer start (%.0fs bis Abschalt). Heizung vorerst auf min_on=%.0f%%", pi_off_delay_, pi_output_min_on_);
         // Set power to minimum while waiting for off-timer to prevent overheating
         set_power_level_percent(pi_output_min_on_);
       } else {
         // Timer already running, check if duration exceeded
         float elapsed_s = (now - time_entered_off_region_) / 1000.0f;
         if (elapsed_s >= pi_off_delay_) {
-          ESP_LOGI(TAG, "PI output below threshold for %.1fs. Turning off.", elapsed_s);
+          ESP_LOGI(TAG, "[HYST] Timer abgelaufen (%.1fs >= %.0fs) -> Heizung AUS", elapsed_s, pi_off_delay_);
           turn_off();
           time_entered_off_region_ = 0; // Reset timer
+        } else {
+          ESP_LOGD(TAG, "[HYST] Timer läuft: %.1fs / %.0fs", elapsed_s, pi_off_delay_);
         }
       }
     } else {
@@ -893,12 +900,15 @@ void SunsterHeater::handle_automatic_mode() {
     time_entered_off_region_ = 0; // Reset off-timer if we recover
 
     if (output_stepped >= pi_output_min_on_) {
+      // Ein-Zone: über min_on -> Heizung ein, Leistung = out_stepped
+      ESP_LOGI(TAG, "[HYST] out_stepped=%.0f >= min_on=%.1f -> Ein-Zone, Leistung=%.0f%%", output_stepped, pi_output_min_on_, output_stepped);
       if (!heater_enabled_) {
         turn_on();
       }
       set_power_level_percent(output_stepped);
     } else {
-      // In hysteresis region (between min_off and min_on)
+      // Hysterese-Band: zwischen min_off und min_on
+      ESP_LOGI(TAG, "[HYST] min_off <= out=%.1f < min_on -> Hysterese-Band, Heizung bleibt bei min_on=%.0f%%", output, pi_output_min_on_);
       if (heater_enabled_) {
         // Keep running at minimum power if we are already on but below min_on
         set_power_level_percent(pi_output_min_on_);
