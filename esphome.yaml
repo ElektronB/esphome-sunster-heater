@@ -52,7 +52,10 @@ sensor:
     address: 0xd43ce1e3810bed28
     id: raumtemperatur
     name: "Raumtemperatur"
-    update_interval: 5s
+    update_interval: 10s  # Langsamere Abfrage für bessere Stabilität
+    filters:
+      - filter_out: nan  # Filtert NaN-Werte heraus
+      - throttle: 30s     # Zusätzliche Drosselung für Stabilität
 
 sunster_heater:
   id: my_heater

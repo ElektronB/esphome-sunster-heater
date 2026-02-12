@@ -1050,8 +1050,12 @@ void SunsterHeater::handle_automatic_mode() {
     pi_output_sensor_->publish_state(output);
   }
 
-  ESP_LOGV(TAG, "[PID] soll=%.1f ist=%.1f out=%.1f out_stepped=%.0f enabled=%s",
-           target_temperature_, external_temperature_, output, output_stepped, heater_enabled_ ? "ON" : "OFF");
+  // Wenn Soll-Temp < Ist-Temp, darf die Heizung nicht starten (nur PID aktiv für Hysterese)
+  bool soll_unter_ist = (target_temperature_ < external_temperature_);
+  
+  ESP_LOGV(TAG, "[PID] soll=%.1f ist=%.1f out=%.1f out_stepped=%.0f enabled=%s soll_unter_ist=%s",
+           target_temperature_, external_temperature_, output, output_stepped, heater_enabled_ ? "ON" : "OFF",
+           soll_unter_ist ? "JA" : "NEIN");
 
   if (output < pi_output_min_off_) {
     // Output is below turn-off threshold (Aus-Zone)
@@ -1087,10 +1091,16 @@ void SunsterHeater::handle_automatic_mode() {
 
     if (output_stepped >= pi_output_min_on_) {
       ESP_LOGD(TAG, "[HYST] out_stepped=%.0f >= min_on=%.1f -> Ein-Zone, Leistung=%.0f%%", output_stepped, pi_output_min_on_, output_stepped);
-      if (!heater_enabled_) {
+      // Heizung nur einschalten, wenn Soll-Temp >= Ist-Temp (error >= 0)
+      if (!heater_enabled_ && !soll_unter_ist) {
         turn_on();
+      } else if (!heater_enabled_ && soll_unter_ist) {
+        ESP_LOGD(TAG, "[HYST] Soll-Temp (%.1f°C) < Ist-Temp (%.1f°C) -> Heizung bleibt AUS, PID aktiv für Hysterese", 
+                 target_temperature_, external_temperature_);
       }
-      set_power_level_percent(output_stepped);
+      if (heater_enabled_) {
+        set_power_level_percent(output_stepped);
+      }
     } else {
       ESP_LOGD(TAG, "[HYST] min_off <= out=%.1f < min_on -> Hysterese-Band, Heizung bleibt bei min_on=%.0f%%", output, pi_output_min_on_);
       if (heater_enabled_) {
