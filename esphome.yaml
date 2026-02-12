@@ -87,21 +87,25 @@ sunster_heater:
   # Automatik-Modus: PI-Regler + Hysterese (UI-einstellbar)
   pi_kp_number:
     name: "Heizung PI Kp"
+    mode: box
     restore_value: true  # Saves value to flash
     optimistic: true
     initial_value: 20
   pi_ki_number:
     name: "Heizung PI Ki"
+    mode: box
     restore_value: true  # Saves value to flash
     optimistic: true
     initial_value: 0.1
   pi_kd_number:
     name: "Heizung PI Kd"
+    mode: box
     restore_value: true  # Saves value to flash
     optimistic: true
     initial_value: 0.2
   pi_off_delay_number:
     name: "Heizung Abschalt-Verzögerung (s)"
+    mode: box
     restore_value: true  # Saves value to flash
     optimistic: true
     initial_value: 180
@@ -110,6 +114,7 @@ sunster_heater:
     step: 10
   pi_on_delay_number:
     name: "Heizung Einschalt-Verzögerung (s)"
+    mode: box
     restore_value: true
     optimistic: true
     initial_value: 30
@@ -124,16 +129,19 @@ sunster_heater:
     initial_value: 21
   pi_output_min_off_number:
     name: "Heizung Hysterese Aus (Stellwert %)"
+    mode: box
     restore_value: true  # Saves value to flash
     optimistic: true
     initial_value: 3
   pi_output_min_on_number:
     name: "Heizung Hysterese Ein (Stellwert %)"
+    mode: box
     restore_value: true  # Saves value to flash
     optimistic: true
     initial_value: 10
   pi_min_on_time_number:
     name: "Heizung Min-On-Zeit (s)"
+    mode: box
     restore_value: true
     optimistic: true
     initial_value: 30
@@ -143,6 +151,7 @@ sunster_heater:
 
   injected_per_pulse_number:
     name: "Fuel Injected Per Pulse"
+    mode: box
     restore_value: true  # Saves value to flash
     optimistic: true
     min_value: 0.001
