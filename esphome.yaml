@@ -46,6 +46,7 @@ one_wire:
 
 sensor:
   # Room temperature for PI control; use address from log if you have multiple sensors
+  # Keine Mittelung/Filter – rohe Messwerte für Predictor-Tuning
   - platform: dallas_temp
     one_wire_id: one_wire_bus
     address: 0xd43ce1e3810bed28
@@ -54,7 +55,7 @@ sensor:
     update_interval: 5s   # 5s for PI prediction
     resolution: 12       # 12-bit, float throughout in controller
     filters:
-      - filter_out: nan
+      - filter_out: nan   # Nur NaN ausfiltern, keine Mittelung
 
 sunster_heater:
   id: my_heater
@@ -66,7 +67,6 @@ sunster_heater:
   # PI controller: output ±100%, on/off via thresholds
   pi_kp: 20.0
   pi_ki: 0.15
-  pi_kd: 1.0
   t_lookahead: 90
   slope_window: 45
   output_off_threshold: -10
@@ -98,12 +98,6 @@ sunster_heater:
     restore_value: true  # Saves value to flash
     optimistic: true
     initial_value: 0.1
-  pi_kd_number:
-    name: "Heater PI Kd"
-    mode: box
-    restore_value: true  # Saves value to flash
-    optimistic: true
-    initial_value: 0.2
   target_temperature_number:
     name: "Heater Target Temperature"
     mode: slider

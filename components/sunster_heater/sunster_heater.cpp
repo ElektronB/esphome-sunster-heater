@@ -746,11 +746,6 @@ void SunsterHeater::publish_all_config_entities_() {
     pi_ki_number_->publish_state(v);
     ESP_LOGD(TAG, "[CONFIG] push PI Ki = %.2f", v);
   }
-  if (pi_kd_number_) {
-    float v = sanitize(pi_kd_, 2.0f);
-    pi_kd_number_->publish_state(v);
-    ESP_LOGD(TAG, "[CONFIG] push PI Kd = %.2f", v);
-  }
   if (target_temperature_number_) {
     float v = sanitize(target_temperature_, 20.0f);
     target_temperature_number_->publish_state(v);
@@ -1065,6 +1060,9 @@ void SunsterHeater::handle_automatic_mode() {
 
   float t_pred = external_temperature_ + slope_filtered_ * t_lookahead_s_;
   float error = target_temperature_ - t_pred;
+
+  if (predicted_temperature_sensor_) predicted_temperature_sensor_->publish_state(t_pred);
+  if (slope_sensor_) slope_sensor_->publish_state(slope_filtered_);
 
   // Pure PI (no D), output ±100%; anti-windup: integrate only when not at limit
   float output_raw = std::max(-100.0f, std::min(100.0f, pi_kp_ * error + pi_integral_));

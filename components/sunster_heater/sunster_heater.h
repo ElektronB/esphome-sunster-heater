@@ -138,7 +138,6 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   void set_power_level_number(number::Number *num) { power_level_number_ = num; }
   void set_pi_kp_number(number::Number *num) { pi_kp_number_ = num; }
   void set_pi_ki_number(number::Number *num) { pi_ki_number_ = num; }
-  void set_pi_kd_number(number::Number *num) { pi_kd_number_ = num; }
   void set_target_temperature_number(number::Number *num) { target_temperature_number_ = num; }
   void set_pi_min_on_time_number(number::Number *num) { pi_min_on_time_number_ = num; }
   void set_t_lookahead_number(number::Number *num) { t_lookahead_number_ = num; }
@@ -165,6 +164,8 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   void set_total_consumption_sensor(sensor::Sensor *sensor) { total_consumption_sensor_ = sensor; }
   void set_low_voltage_error_sensor(binary_sensor::BinarySensor *sensor) { low_voltage_error_sensor_ = sensor; }
   void set_pi_output_sensor(sensor::Sensor *sensor) { pi_output_sensor_ = sensor; }
+  void set_predicted_temperature_sensor(sensor::Sensor *sensor) { predicted_temperature_sensor_ = sensor; }
+  void set_slope_sensor(sensor::Sensor *sensor) { slope_sensor_ = sensor; }
 
   // Control methods (turn_on returns false if start rejected, e.g. target < measured in automatic mode)
   bool turn_on();
@@ -336,11 +337,12 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   sensor::Sensor *total_consumption_sensor_{nullptr};
   binary_sensor::BinarySensor *low_voltage_error_sensor_{nullptr};
   sensor::Sensor *pi_output_sensor_{nullptr};
+  sensor::Sensor *predicted_temperature_sensor_{nullptr};
+  sensor::Sensor *slope_sensor_{nullptr};
   number::Number *injected_per_pulse_number_{nullptr};
   number::Number *power_level_number_{nullptr};
   number::Number *pi_kp_number_{nullptr};
   number::Number *pi_ki_number_{nullptr};
-  number::Number *pi_kd_number_{nullptr};
   number::Number *target_temperature_number_{nullptr};
   number::Number *pi_min_on_time_number_{nullptr};
   number::Number *t_lookahead_number_{nullptr};
@@ -595,47 +597,6 @@ class SunsterPiKiNumber : public number::Number, public Component {
   void control(float value) override {
     if (heater_) {
       heater_->set_pi_ki(value);
-      heater_->save_config_preferences();
-      this->publish_state(value);
-    }
-  }
-  SunsterHeater *heater_{nullptr};
-  uint32_t last_publish_{0};
-};
-
-// Number component for PI Kd (automatic mode)
-class SunsterPiKdNumber : public number::Number, public Component {
- public:
-  void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
-  float get_setup_priority() const override { return setup_priority::AFTER_CONNECTION; }
-  void setup() override {
-    if (heater_) {
-      float v = heater_->get_pi_kd();
-      if (std::isnan(v)) v = 2.0f;
-      ESP_LOGI(TAG, "[SEND_HA] PI Kd = %.2f (setup)", v);
-      this->publish_state(v);
-    }
-  }
-  void dump_config() override {
-    LOG_NUMBER("", "Sunster Heater PI Kd", this);
-  }
- protected:
-  void loop() override {
-    Component::loop();
-    if (!heater_) return;
-    uint32_t now = millis();
-    uint32_t interval = (now < 60000u) ? 3000u : 15000u;
-    if (last_publish_ == 0u || (now - last_publish_ >= interval)) {
-      float v = heater_->get_pi_kd();
-      if (std::isnan(v)) v = 2.0f;
-      if (last_publish_ == 0u) ESP_LOGI(TAG, "[SEND_HA] PI Kd = %.2f (first loop)", v);
-      last_publish_ = now;
-      this->publish_state(v);
-    }
-  }
-  void control(float value) override {
-    if (heater_) {
-      heater_->set_pi_kd(value);
       heater_->save_config_preferences();
       this->publish_state(value);
     }

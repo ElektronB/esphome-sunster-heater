@@ -37,7 +37,6 @@ SunsterHeaterPowerSwitch = sunster_heater_ns.class_("SunsterHeaterPowerSwitch", 
 SunsterHeaterPowerLevelNumber = sunster_heater_ns.class_("SunsterHeaterPowerLevelNumber", number.Number, cg.Component)
 SunsterPiKpNumber = sunster_heater_ns.class_("SunsterPiKpNumber", number.Number, cg.Component)
 SunsterPiKiNumber = sunster_heater_ns.class_("SunsterPiKiNumber", number.Number, cg.Component)
-SunsterPiKdNumber = sunster_heater_ns.class_("SunsterPiKdNumber", number.Number, cg.Component)
 SunsterTargetTemperatureNumber = sunster_heater_ns.class_("SunsterTargetTemperatureNumber", number.Number, cg.Component)
 SunsterPiMinOnTimeNumber = sunster_heater_ns.class_("SunsterPiMinOnTimeNumber", number.Number, cg.Component)
 SunsterTLookaheadNumber = sunster_heater_ns.class_("SunsterTLookaheadNumber", number.Number, cg.Component)
@@ -61,7 +60,6 @@ CONF_POWER_SWITCH = "power_switch"
 CONF_POWER_LEVEL_NUMBER = "power_level_number"
 CONF_PI_KP_NUMBER = "pi_kp_number"
 CONF_PI_KI_NUMBER = "pi_ki_number"
-CONF_PI_KD_NUMBER = "pi_kd_number"
 CONF_TARGET_TEMPERATURE_NUMBER = "target_temperature_number"
 CONF_PI_MIN_ON_TIME_NUMBER = "pi_min_on_time_number"
 CONF_T_LOOKAHEAD = "t_lookahead"
@@ -93,6 +91,8 @@ CONF_DAILY_CONSUMPTION = "daily_consumption"
 CONF_TOTAL_CONSUMPTION = "total_consumption"
 CONF_LOW_VOLTAGE_ERROR = "low_voltage_error"
 CONF_PI_OUTPUT = "pi_output"
+CONF_PREDICTED_TEMPERATURE = "predicted_temperature"
+CONF_SLOPE = "slope"
 
 # Fuel consumption constants
 UNIT_MILLILITERS = "ml"
@@ -159,6 +159,19 @@ SENSOR_SCHEMAS = {
         accuracy_decimals=1,
         icon=ICON_POWER,
     ),
+    CONF_PREDICTED_TEMPERATURE: sensor.sensor_schema(
+        unit_of_measurement=UNIT_CELSIUS,
+        device_class=DEVICE_CLASS_TEMPERATURE,
+        state_class=STATE_CLASS_MEASUREMENT,
+        accuracy_decimals=2,
+        icon=ICON_THERMOMETER,
+    ),
+    CONF_SLOPE: sensor.sensor_schema(
+        unit_of_measurement="°C/s",
+        state_class=STATE_CLASS_MEASUREMENT,
+        accuracy_decimals=4,
+        icon="mdi:chart-line",
+    ),
     CONF_LOW_VOLTAGE_ERROR: binary_sensor.binary_sensor_schema(
         icon="mdi:alert-circle",
         device_class="problem",
@@ -210,9 +223,6 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional("pi_ki", default=0.5): cv.float_range(
                 min=0.0, max=5.0
             ),
-            cv.Optional("pi_kd", default=0.0): cv.float_range(
-                min=0.0, max=50.0
-            ),
             cv.Optional("pi_min_on_time", default=30.0): cv.float_range(
                 min=0.0, max=300.0
             ),
@@ -261,6 +271,8 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_HOURLY_CONSUMPTION): SENSOR_SCHEMAS[CONF_HOURLY_CONSUMPTION],
             cv.Optional(CONF_DAILY_CONSUMPTION): SENSOR_SCHEMAS[CONF_DAILY_CONSUMPTION],
             cv.Optional(CONF_TOTAL_CONSUMPTION): SENSOR_SCHEMAS[CONF_TOTAL_CONSUMPTION],
+            cv.Optional(CONF_PREDICTED_TEMPERATURE): SENSOR_SCHEMAS[CONF_PREDICTED_TEMPERATURE],
+            cv.Optional(CONF_SLOPE): SENSOR_SCHEMAS[CONF_SLOPE],
             cv.Optional(CONF_INJECTED_PER_PULSE_NUMBER): number.number_schema(
                 SunsterInjectedPerPulseNumber,
                 unit_of_measurement=UNIT_MILLILITERS,
@@ -317,17 +329,6 @@ CONFIG_SCHEMA = cv.All(
                 cv.Optional("min_value", default=0.0): cv.float_,
                 cv.Optional("max_value", default=5.0): cv.float_,
                 cv.Optional("step", default=0.01): cv.float_,
-                **NUMBER_EXTRA,
-            }),
-            cv.Optional(CONF_PI_KD_NUMBER): number.number_schema(
-                SunsterPiKdNumber,
-                unit_of_measurement="",
-                icon="mdi:tune",
-                entity_category="config",
-            ).extend({
-                cv.Optional("min_value", default=0.0): cv.float_,
-                cv.Optional("max_value", default=50.0): cv.float_,
-                cv.Optional("step", default=0.1): cv.float_,
                 **NUMBER_EXTRA,
             }),
             cv.Optional(CONF_TARGET_TEMPERATURE_NUMBER): number.number_schema(
@@ -445,7 +446,6 @@ async def to_code(config):
     cg.add(var.set_target_temperature(config["target_temperature"]))
     cg.add(var.set_pi_kp(config["pi_kp"]))
     cg.add(var.set_pi_ki(config["pi_ki"]))
-    cg.add(var.set_pi_kd(config["pi_kd"]))
     if "pi_min_on_time" in config:
         cg.add(var.set_pi_min_on_time(config["pi_min_on_time"]))
     cg.add(var.set_t_lookahead(config[CONF_T_LOOKAHEAD]))
@@ -476,6 +476,8 @@ async def to_code(config):
             (CONF_DAILY_CONSUMPTION, "set_daily_consumption_sensor"),
             (CONF_TOTAL_CONSUMPTION, "set_total_consumption_sensor"),
             (CONF_PI_OUTPUT, "set_pi_output_sensor"),
+            (CONF_PREDICTED_TEMPERATURE, "set_predicted_temperature_sensor"),
+            (CONF_SLOPE, "set_slope_sensor"),
         ]
 
         text_sensors_to_create = [
@@ -537,6 +539,8 @@ async def to_code(config):
             (CONF_DAILY_CONSUMPTION, "set_daily_consumption_sensor", sensor.new_sensor),
             (CONF_TOTAL_CONSUMPTION, "set_total_consumption_sensor", sensor.new_sensor),
             (CONF_PI_OUTPUT, "set_pi_output_sensor", sensor.new_sensor),
+            (CONF_PREDICTED_TEMPERATURE, "set_predicted_temperature_sensor", sensor.new_sensor),
+            (CONF_SLOPE, "set_slope_sensor", sensor.new_sensor),
             (CONF_STATE, "set_state_sensor", text_sensor.new_text_sensor),
             (CONF_GLOW_PLUG_STATUS, "set_glow_plug_status_sensor", text_sensor.new_text_sensor),
             (CONF_LOW_VOLTAGE_ERROR, "set_low_voltage_error_sensor", binary_sensor.new_binary_sensor),
@@ -591,11 +595,6 @@ async def to_code(config):
         num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
         cg.add(num.set_sunster_heater(var))
         cg.add(var.set_pi_ki_number(num))
-    if CONF_PI_KD_NUMBER in config:
-        num_config = config[CONF_PI_KD_NUMBER]
-        num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
-        cg.add(num.set_sunster_heater(var))
-        cg.add(var.set_pi_kd_number(num))
     if CONF_TARGET_TEMPERATURE_NUMBER in config:
         num_config = config[CONF_TARGET_TEMPERATURE_NUMBER]
         num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
