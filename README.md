@@ -63,7 +63,7 @@ Feel free to use any pin for TX and RX. \
 
 ![Connection ESP32 to heater](https://github.com/zatakon/vevor_heater_control/blob/main/docs/images/vevor_heater_esp32.PNG?raw=true)
 
-Refer to the original project's [hardware documentation](https://github.com/zatakon/vevor_heater_control#4-hardware) for more informations.
+Refer to the original project's [hardware documentation](https://github.com/zatakon/vevor_heater_control#4-hardware) for more information.
 
 ## Versioning
 
@@ -156,9 +156,21 @@ number:
       - lambda: "id(my_heater).set_power_level_percent(x);"
 ```
 
-#### Automatic Mode with Temperature Sensor - don't use please, will be modified
+#### Automatic Mode (PI Controller with Temperature Prediction)
 
-*Will be implemented*
+In automatic mode, the heater is controlled by a **PI controller with temperature prediction** to reach and hold a target temperature without overshoot or constant on/off cycling.
+
+**How it works:**
+
+- **Prediction:** The controller uses a predicted temperature `T_pred = T_measured + slope × t_lookahead` instead of the raw sensor value. The slope is a filtered rate (°C/s). This reduces overshoot when heating and improves reaction when the room is cooling down.
+- **PI only:** Output is `Kp×error + I` with error `= target − T_pred`. No D-term. Output range is **±100%** (negative = cooling down, positive = heating needed).
+- **On/off by thresholds:** The heater turns **off** when controller output drops below `output_off_threshold` (e.g. -10%). It turns **on** when output rises above `output_on_threshold` (e.g. +10%). No separate on/off delay timers.
+- **Power when on:** When the heater is on, power is set in 10% steps (10–100%) from the positive controller output.
+- **Min-on time:** After stable combustion, the heater stays on for a configurable minimum time before it may turn off (avoids short cycles).
+
+**Configuration (YAML and UI):** `pi_kp`, `pi_ki`, `pi_kd` (Kd unused), `target_temperature`, `t_lookahead`, `slope_window`, `output_off_threshold`, `output_on_threshold`, `pi_min_on_time_number`. All of these can be exposed as Number entities in Home Assistant. The external temperature sensor should use **5 s** update interval and **12-bit** resolution; the component uses float throughout.
+
+See **[PI_CONTROLLER_GUIDE.md](PI_CONTROLLER_GUIDE.md)** for the theory, block diagram, and tuning steps.
 
 #### Antifreeze Mode (Temperature-Based Protection)
 
@@ -412,52 +424,52 @@ sunster_heater:
   
   # Optional control components
   control_mode_select:
-    name: "Heizung Modus"          # Manual/Automatic/Antifreeze selector
+    name: "Heater Mode"            # Manual/Automatic/Antifreeze selector
   power_switch:
-    name: "Heizung Ein-Aus"        # Master on/off (in Automatic: PI won't turn on when OFF)
+    name: "Heater On-Off"          # Master on/off (in Automatic: PI won't turn on when OFF)
   power_level_number:
-    name: "Heizung Leistung"      # 10-100% (Manual mode)
+    name: "Heater Power"           # 10-100% (Manual mode)
   target_temperature_number:
-    name: "Heizung Solltemperatur" # Target temp (Automatic mode)
+    name: "Heater Target Temperature"  # Target temp (Automatic mode)
   reset_total_consumption_button:
     name: "Reset Total Consumption"
 ```
 
-**Power switch (Ein-Aus):** In Automatic mode, the power switch acts as a master enable: when OFF, the PI controller will not turn the heater on. You must switch ON to allow automatic control.
+**Power switch:** In Automatic mode, the power switch is the master enable: when OFF, the PI controller will not turn the heater on. Switch ON to allow automatic control.
 
-**Modusabhängige Steuerung:** Show Power Level (Manual) or Solltemperatur (Automatic) in your Home Assistant dashboard using conditional cards:
+**Mode-dependent dashboard:** Show Power (Manual) or Target Temperature (Automatic) using conditional cards:
 
 ```yaml
-# Lovelace – modusabhängige Steuerelemente
-# Passe die entity_ids an deine Installation an (van-heizung = Gerätename)
+# Lovelace – mode-dependent controls
+# Adjust entity_ids to your device name (e.g. van_heater)
 type: vertical-stack
 cards:
   - type: entities
     entities:
-      - entity: select.van_heizung_heizung_modus
-        name: Modus
-      - entity: switch.van_heizung_heizung_ein_aus
-        name: Ein/Aus
+      - entity: select.van_heater_heater_mode
+        name: Mode
+      - entity: switch.van_heater_heater_on_off
+        name: On/Off
   - type: conditional
     conditions:
       - condition: state
-        entity: select.van_heizung_heizung_modus
+        entity: select.van_heater_heater_mode
         state: "Manual"
     card:
       type: entities
       entities:
-        - entity: number.van_heizung_heizung_leistung
-          name: Leistung %
+        - entity: number.van_heater_heater_power
+          name: Power %
   - type: conditional
     conditions:
       - condition: state
-        entity: select.van_heizung_heizung_modus
+        entity: select.van_heater_heater_mode
         state: "Automatic"
     card:
       type: entities
       entities:
-        - entity: number.van_heizung_heizung_solltemperatur
-          name: Solltemperatur °C
+        - entity: number.van_heater_heater_target_temperature
+          name: Target Temperature °C
 ```
 
 ### Low Voltage Protection

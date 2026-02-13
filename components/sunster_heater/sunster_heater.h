@@ -80,12 +80,12 @@ struct HeaterConfigData {
   float pi_output_min_on;
   float injected_per_pulse;
   float pi_off_delay;
-  float pi_min_on_time_s;  // Min-On-Zeit nach STABLE_COMBUSTION (Sekunden)
-  float pi_on_delay;       // (unused in v6: Ein/Aus über Schwellen)
-  float t_lookahead;        // Vorausschau [s] für Prädiktion
-  float slope_window;      // EMA-Fenster für Steigung [s]
-  float output_off_threshold;  // Reglerausgabe < dies → Heizung aus (z.B. -10)
-  float output_on_threshold;  // Reglerausgabe > dies → Heizung ein (z.B. +10)
+  float pi_min_on_time_s;  // Min-on time after STABLE_COMBUSTION [s]
+  float pi_on_delay;       // (unused in v6: on/off via thresholds)
+  float t_lookahead;       // Lookahead time [s] for prediction
+  float slope_window;      // EMA window for slope [s]
+  float output_off_threshold;  // Heater off when output < this (e.g. -10)
+  float output_on_threshold;   // Heater on when output > this (e.g. +10)
 };
 
 class SunsterHeater : public PollingComponent, public uart::UARTDevice {
@@ -111,10 +111,6 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   void set_pi_kp(float kp) { pi_kp_ = kp; }
   void set_pi_ki(float ki) { pi_ki_ = ki; }
   void set_pi_kd(float kd) { pi_kd_ = kd; }
-  void set_pi_off_delay(float delay_s) { pi_off_delay_ = delay_s; }
-  void set_pi_on_delay(float delay_s) { pi_on_delay_s_ = delay_s; }
-  void set_pi_output_min_off(float v) { pi_output_min_off_ = v; }
-  void set_pi_output_min_on(float v) { pi_output_min_on_ = v; }
   void set_pi_min_on_time(float time_s) { pi_min_on_time_s_ = time_s; }
   void set_t_lookahead(float s) { t_lookahead_s_ = s; }
   void set_slope_window(float s) { slope_window_s_ = s; }
@@ -133,10 +129,6 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   float get_pi_kp() const { return pi_kp_; }
   float get_pi_ki() const { return pi_ki_; }
   float get_pi_kd() const { return pi_kd_; }
-  float get_pi_off_delay() const { return pi_off_delay_; }
-  float get_pi_on_delay() const { return pi_on_delay_s_; }
-  float get_pi_output_min_off() const { return pi_output_min_off_; }
-  float get_pi_output_min_on() const { return pi_output_min_on_; }
   float get_pi_min_on_time() const { return pi_min_on_time_s_; }
 
   void save_config_preferences();
@@ -150,11 +142,7 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   void set_pi_kp_number(number::Number *num) { pi_kp_number_ = num; }
   void set_pi_ki_number(number::Number *num) { pi_ki_number_ = num; }
   void set_pi_kd_number(number::Number *num) { pi_kd_number_ = num; }
-  void set_pi_off_delay_number(number::Number *num) { pi_off_delay_number_ = num; }
-  void set_pi_on_delay_number(number::Number *num) { pi_on_delay_number_ = num; }
   void set_target_temperature_number(number::Number *num) { target_temperature_number_ = num; }
-  void set_pi_output_min_off_number(number::Number *num) { pi_output_min_off_number_ = num; }
-  void set_pi_output_min_on_number(number::Number *num) { pi_output_min_on_number_ = num; }
   void set_pi_min_on_time_number(number::Number *num) { pi_min_on_time_number_ = num; }
   void set_t_lookahead_number(number::Number *num) { t_lookahead_number_ = num; }
   void set_slope_window_number(number::Number *num) { slope_window_number_ = num; }
@@ -181,7 +169,7 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   void set_low_voltage_error_sensor(binary_sensor::BinarySensor *sensor) { low_voltage_error_sensor_ = sensor; }
   void set_pi_output_sensor(sensor::Sensor *sensor) { pi_output_sensor_ = sensor; }
 
-  // Control methods (turn_on returns false if start rejected, e.g. Soll < Ist in automatic mode)
+  // Control methods (turn_on returns false if start rejected, e.g. target < measured in automatic mode)
   bool turn_on();
   void turn_off();
   void set_power_level_percent(float percent);
@@ -295,7 +283,7 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   float last_antifreeze_power_{0.0f};
   bool antifreeze_active_{false};
 
-  // PI controller (automatic mode): Ausgabe ±100%, Ein/Aus über Schwellen
+  // PI controller (automatic mode): output ±100%, on/off via thresholds
   float pi_kp_{10.0f};
   float pi_ki_{0.5f};
   float pi_kd_{0.0f};
@@ -303,8 +291,8 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   float pi_on_delay_s_{30.0f};
   float pi_output_min_off_{3.0f};
   float pi_output_min_on_{15.0f};
-  float output_off_threshold_{-10.0f};  // Reglerausgabe < dies → Aus
-  float output_on_threshold_{10.0f};     // Reglerausgabe > dies → Ein
+  float output_off_threshold_{-10.0f};  // Heater off when output < this
+  float output_on_threshold_{10.0f};    // Heater on when output > this
   float pi_integral_{0.0f};
   float last_error_{0.0f};
   uint32_t last_pi_time_{0};
@@ -316,7 +304,7 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   float pi_min_on_time_s_{30.0f};
   static constexpr uint32_t PI_SENSOR_GRACE_PERIOD_MS = 600000;
 
-  // Temperaturprädiktion (immer aktiv)
+  // Temperature prediction (always active)
   float t_lookahead_s_{90.0f};
   float slope_window_s_{45.0f};
   float slope_filtered_{0.0f};
@@ -374,11 +362,7 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   number::Number *pi_kp_number_{nullptr};
   number::Number *pi_ki_number_{nullptr};
   number::Number *pi_kd_number_{nullptr};
-  number::Number *pi_off_delay_number_{nullptr};
-  number::Number *pi_on_delay_number_{nullptr};
   number::Number *target_temperature_number_{nullptr};
-  number::Number *pi_output_min_off_number_{nullptr};
-  number::Number *pi_output_min_on_number_{nullptr};
   number::Number *pi_min_on_time_number_{nullptr};
   number::Number *t_lookahead_number_{nullptr};
   number::Number *slope_window_number_{nullptr};
@@ -719,47 +703,6 @@ class SunsterPiKdNumber : public number::Number, public Component {
   uint32_t last_publish_{0};
 };
 
-// Number component for PI Off Delay (automatic mode)
-class SunsterPiOffDelayNumber : public number::Number, public Component {
- public:
-  void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
-  float get_setup_priority() const override { return setup_priority::AFTER_CONNECTION; }
-  void setup() override {
-    if (heater_) {
-      float v = heater_->get_pi_off_delay();
-      if (std::isnan(v)) v = 60.0f;
-      ESP_LOGI(TAG, "[SEND_HA] PI OffDelay = %.0f (setup)", v);
-      this->publish_state(v);
-    }
-  }
-  void dump_config() override {
-    LOG_NUMBER("", "Sunster Heater PI Off Delay", this);
-  }
- protected:
-  void loop() override {
-    Component::loop();
-    if (!heater_) return;
-    uint32_t now = millis();
-    uint32_t interval = (now < 60000u) ? 3000u : 15000u;
-    if (last_publish_ == 0u || (now - last_publish_ >= interval)) {
-      float v = heater_->get_pi_off_delay();
-      if (std::isnan(v)) v = 60.0f;
-      if (last_publish_ == 0u) ESP_LOGI(TAG, "[SEND_HA] PI OffDelay = %.0f (first loop)", v);
-      last_publish_ = now;
-      this->publish_state(v);
-    }
-  }
-  void control(float value) override {
-    if (heater_) {
-      heater_->set_pi_off_delay(value);
-      heater_->save_config_preferences();
-      this->publish_state(value);
-    }
-  }
-  SunsterHeater *heater_{nullptr};
-  uint32_t last_publish_{0};
-};
-
 // Number component for target temperature (automatic mode)
 class SunsterTargetTemperatureNumber : public number::Number, public Component {
  public:
@@ -794,129 +737,6 @@ class SunsterTargetTemperatureNumber : public number::Number, public Component {
   void control(float value) override {
     if (heater_) {
       heater_->set_target_temperature(value);
-      heater_->save_config_preferences();
-      this->publish_state(value);
-    }
-  }
-  SunsterHeater *heater_{nullptr};
-  uint32_t last_publish_{0};
-};
-
-// Number component for PI On Delay (Einschalt-Verzögerung)
-class SunsterPiOnDelayNumber : public number::Number, public Component {
- public:
-  void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
-  float get_setup_priority() const override { return setup_priority::AFTER_CONNECTION; }
-  void setup() override {
-    if (heater_) {
-      float v = heater_->get_pi_on_delay();
-      if (std::isnan(v)) v = 30.0f;
-      ESP_LOGI(TAG, "[SEND_HA] PI OnDelay = %.0f s (setup)", v);
-      this->publish_state(v);
-    }
-  }
-  void dump_config() override {
-    LOG_NUMBER("", "Sunster Heater PI On Delay", this);
-  }
- protected:
-  void loop() override {
-    Component::loop();
-    if (!heater_) return;
-    uint32_t now = millis();
-    uint32_t interval = (now < 60000u) ? 3000u : 15000u;
-    if (last_publish_ == 0u || (now - last_publish_ >= interval)) {
-      float v = heater_->get_pi_on_delay();
-      if (std::isnan(v)) v = 30.0f;
-      if (last_publish_ == 0u) ESP_LOGI(TAG, "[SEND_HA] PI OnDelay = %.0f s (first loop)", v);
-      last_publish_ = now;
-      this->publish_state(v);
-    }
-  }
-  void control(float value) override {
-    if (heater_) {
-      heater_->set_pi_on_delay(value);
-      heater_->save_config_preferences();
-      this->publish_state(value);
-    }
-  }
-  SunsterHeater *heater_{nullptr};
-  uint32_t last_publish_{0};
-};
-
-// Number component for PI output min off = hysteresis lower (automatic mode)
-class SunsterPiOutputMinOffNumber : public number::Number, public Component {
- public:
-  void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
-  float get_setup_priority() const override { return setup_priority::AFTER_CONNECTION; }
-  void setup() override {
-    if (heater_) {
-      float v = heater_->get_pi_output_min_off();
-      if (std::isnan(v)) v = 3.0f;
-      ESP_LOGI(TAG, "[SEND_HA] PI MinOff = %.1f (setup)", v);
-      this->publish_state(v);
-    }
-  }
-  void dump_config() override {
-    LOG_NUMBER("", "Sunster Heater PI Min Off", this);
-  }
- protected:
-  void loop() override {
-    Component::loop();
-    if (!heater_) return;
-    uint32_t now = millis();
-    uint32_t interval = (now < 60000u) ? 3000u : 15000u;
-    if (last_publish_ == 0u || (now - last_publish_ >= interval)) {
-      float v = heater_->get_pi_output_min_off();
-      if (std::isnan(v)) v = 3.0f;
-      if (last_publish_ == 0u) ESP_LOGI(TAG, "[SEND_HA] PI MinOff = %.1f (first loop)", v);
-      last_publish_ = now;
-      this->publish_state(v);
-    }
-  }
-  void control(float value) override {
-    if (heater_) {
-      heater_->set_pi_output_min_off(value);
-      heater_->save_config_preferences();
-      this->publish_state(value);
-    }
-  }
-  SunsterHeater *heater_{nullptr};
-  uint32_t last_publish_{0};
-};
-
-// Number component for PI output min on = hysteresis upper (automatic mode)
-class SunsterPiOutputMinOnNumber : public number::Number, public Component {
- public:
-  void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
-  float get_setup_priority() const override { return setup_priority::AFTER_CONNECTION; }
-  void setup() override {
-    if (heater_) {
-      float v = heater_->get_pi_output_min_on();
-      if (std::isnan(v)) v = 15.0f;
-      ESP_LOGI(TAG, "[SEND_HA] PI MinOn = %.1f (setup)", v);
-      this->publish_state(v);
-    }
-  }
-  void dump_config() override {
-    LOG_NUMBER("", "Sunster Heater PI Min On", this);
-  }
- protected:
-  void loop() override {
-    Component::loop();
-    if (!heater_) return;
-    uint32_t now = millis();
-    uint32_t interval = (now < 60000u) ? 3000u : 15000u;
-    if (last_publish_ == 0u || (now - last_publish_ >= interval)) {
-      float v = heater_->get_pi_output_min_on();
-      if (std::isnan(v)) v = 15.0f;
-      if (last_publish_ == 0u) ESP_LOGI(TAG, "[SEND_HA] PI MinOn = %.1f (first loop)", v);
-      last_publish_ = now;
-      this->publish_state(v);
-    }
-  }
-  void control(float value) override {
-    if (heater_) {
-      heater_->set_pi_output_min_on(value);
       heater_->save_config_preferences();
       this->publish_state(value);
     }
@@ -966,7 +786,7 @@ class SunsterPiMinOnTimeNumber : public number::Number, public Component {
   uint32_t last_publish_{0};
 };
 
-// Number component for t_lookahead (Vorausschau Prädiktion)
+// Number component for t_lookahead (prediction lookahead)
 class SunsterTLookaheadNumber : public number::Number, public Component {
  public:
   void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
@@ -978,7 +798,7 @@ class SunsterTLookaheadNumber : public number::Number, public Component {
       this->publish_state(v);
     }
   }
-  void dump_config() override { LOG_NUMBER("", "Sunster Heater Vorausschau (s)", this); }
+  void dump_config() override { LOG_NUMBER("", "Sunster Heater Lookahead (s)", this); }
  protected:
   void loop() override {
     Component::loop();
@@ -1000,7 +820,7 @@ class SunsterTLookaheadNumber : public number::Number, public Component {
   uint32_t last_publish_{0};
 };
 
-// Number component for slope_window (Steigungsfenster Prädiktion)
+// Number component for slope_window (prediction slope window)
 class SunsterSlopeWindowNumber : public number::Number, public Component {
  public:
   void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
@@ -1012,7 +832,7 @@ class SunsterSlopeWindowNumber : public number::Number, public Component {
       this->publish_state(v);
     }
   }
-  void dump_config() override { LOG_NUMBER("", "Sunster Heater Steigungsfenster (s)", this); }
+  void dump_config() override { LOG_NUMBER("", "Sunster Heater Slope Window (s)", this); }
  protected:
   void loop() override {
     Component::loop();
@@ -1034,7 +854,7 @@ class SunsterSlopeWindowNumber : public number::Number, public Component {
   uint32_t last_publish_{0};
 };
 
-// Number component for output_off_threshold (Regler Aus-Schwelle %)
+// Number component for output_off_threshold (controller off threshold %)
 class SunsterOutputOffThresholdNumber : public number::Number, public Component {
  public:
   void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
@@ -1046,7 +866,7 @@ class SunsterOutputOffThresholdNumber : public number::Number, public Component 
       this->publish_state(v);
     }
   }
-  void dump_config() override { LOG_NUMBER("", "Sunster Heater Regler Aus-Schwelle (%)", this); }
+  void dump_config() override { LOG_NUMBER("", "Sunster Heater Off Threshold (%)", this); }
  protected:
   void loop() override {
     Component::loop();
@@ -1068,7 +888,7 @@ class SunsterOutputOffThresholdNumber : public number::Number, public Component 
   uint32_t last_publish_{0};
 };
 
-// Number component for output_on_threshold (Regler Ein-Schwelle %)
+// Number component for output_on_threshold (controller on threshold %)
 class SunsterOutputOnThresholdNumber : public number::Number, public Component {
  public:
   void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
@@ -1080,7 +900,7 @@ class SunsterOutputOnThresholdNumber : public number::Number, public Component {
       this->publish_state(v);
     }
   }
-  void dump_config() override { LOG_NUMBER("", "Sunster Heater Regler Ein-Schwelle (%)", this); }
+  void dump_config() override { LOG_NUMBER("", "Sunster Heater On Threshold (%)", this); }
  protected:
   void loop() override {
     Component::loop();

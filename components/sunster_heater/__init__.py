@@ -39,11 +39,7 @@ SunsterHeaterPowerLevelNumber = sunster_heater_ns.class_("SunsterHeaterPowerLeve
 SunsterPiKpNumber = sunster_heater_ns.class_("SunsterPiKpNumber", number.Number, cg.Component)
 SunsterPiKiNumber = sunster_heater_ns.class_("SunsterPiKiNumber", number.Number, cg.Component)
 SunsterPiKdNumber = sunster_heater_ns.class_("SunsterPiKdNumber", number.Number, cg.Component)
-SunsterPiOffDelayNumber = sunster_heater_ns.class_("SunsterPiOffDelayNumber", number.Number, cg.Component)
-SunsterPiOnDelayNumber = sunster_heater_ns.class_("SunsterPiOnDelayNumber", number.Number, cg.Component)
 SunsterTargetTemperatureNumber = sunster_heater_ns.class_("SunsterTargetTemperatureNumber", number.Number, cg.Component)
-SunsterPiOutputMinOffNumber = sunster_heater_ns.class_("SunsterPiOutputMinOffNumber", number.Number, cg.Component)
-SunsterPiOutputMinOnNumber = sunster_heater_ns.class_("SunsterPiOutputMinOnNumber", number.Number, cg.Component)
 SunsterPiMinOnTimeNumber = sunster_heater_ns.class_("SunsterPiMinOnTimeNumber", number.Number, cg.Component)
 SunsterTLookaheadNumber = sunster_heater_ns.class_("SunsterTLookaheadNumber", number.Number, cg.Component)
 SunsterSlopeWindowNumber = sunster_heater_ns.class_("SunsterSlopeWindowNumber", number.Number, cg.Component)
@@ -68,11 +64,7 @@ CONF_POWER_LEVEL_NUMBER = "power_level_number"
 CONF_PI_KP_NUMBER = "pi_kp_number"
 CONF_PI_KI_NUMBER = "pi_ki_number"
 CONF_PI_KD_NUMBER = "pi_kd_number"
-CONF_PI_OFF_DELAY_NUMBER = "pi_off_delay_number"
-CONF_PI_ON_DELAY_NUMBER = "pi_on_delay_number"
 CONF_TARGET_TEMPERATURE_NUMBER = "target_temperature_number"
-CONF_PI_OUTPUT_MIN_OFF_NUMBER = "pi_output_min_off_number"
-CONF_PI_OUTPUT_MIN_ON_NUMBER = "pi_output_min_on_number"
 CONF_PI_MIN_ON_TIME_NUMBER = "pi_min_on_time_number"
 CONF_T_LOOKAHEAD = "t_lookahead"
 CONF_SLOPE_WINDOW = "slope_window"
@@ -108,8 +100,8 @@ CONF_PI_OUTPUT = "pi_output"
 UNIT_MILLILITERS = "ml"
 UNIT_MILLILITERS_PER_HOUR = "ml/h"
 
-# Standard number options (wie normale ESPHome Numbers, für YAML-Kompatibilität)
-# restore_value/optimistic/initial_value werden im Schema akzeptiert; Persistenz macht weiterhin der Heater (pref_config_).
+# Standard number options (like normal ESPHome Numbers, for YAML compatibility)
+# restore_value/optimistic/initial_value are accepted in the schema; persistence is still handled by the heater (pref_config_).
 NUMBER_EXTRA = {
     cv.Optional("restore_value", default=False): cv.boolean,
     cv.Optional("optimistic", default=True): cv.boolean,
@@ -222,18 +214,6 @@ CONFIG_SCHEMA = cv.All(
             ),
             cv.Optional("pi_kd", default=0.0): cv.float_range(
                 min=0.0, max=50.0
-            ),
-            cv.Optional("pi_off_delay", default=60.0): cv.float_range(
-                min=0.0, max=600.0
-            ),
-            cv.Optional("pi_output_min_off", default=3.0): cv.float_range(
-                min=0.0, max=20.0
-            ),
-            cv.Optional("pi_output_min_on", default=15.0): cv.float_range(
-                min=5.0, max=50.0
-            ),
-            cv.Optional("pi_on_delay", default=30.0): cv.float_range(
-                min=0.0, max=600.0
             ),
             cv.Optional("pi_min_on_time", default=30.0): cv.float_range(
                 min=0.0, max=300.0
@@ -366,28 +346,6 @@ CONFIG_SCHEMA = cv.All(
                 cv.Optional("step", default=0.1): cv.float_,
                 **NUMBER_EXTRA,
             }),
-            cv.Optional(CONF_PI_OFF_DELAY_NUMBER): number.number_schema(
-                SunsterPiOffDelayNumber,
-                unit_of_measurement="s",
-                icon="mdi:timer-sand",
-                entity_category="config",
-            ).extend({
-                cv.Optional("min_value", default=0.0): cv.float_,
-                cv.Optional("max_value", default=600.0): cv.float_,
-                cv.Optional("step", default=10.0): cv.float_,
-                **NUMBER_EXTRA,
-            }),
-            cv.Optional(CONF_PI_ON_DELAY_NUMBER): number.number_schema(
-                SunsterPiOnDelayNumber,
-                unit_of_measurement="s",
-                icon="mdi:timer-outline",
-                entity_category="config",
-            ).extend({
-                cv.Optional("min_value", default=0.0): cv.float_,
-                cv.Optional("max_value", default=600.0): cv.float_,
-                cv.Optional("step", default=5.0): cv.float_,
-                **NUMBER_EXTRA,
-            }),
             cv.Optional(CONF_TARGET_TEMPERATURE_NUMBER): number.number_schema(
                 SunsterTargetTemperatureNumber,
                 unit_of_measurement=UNIT_CELSIUS,
@@ -397,28 +355,6 @@ CONFIG_SCHEMA = cv.All(
                 cv.Optional("min_value", default=5.0): cv.float_,
                 cv.Optional("max_value", default=35.0): cv.float_,
                 cv.Optional("step", default=0.5): cv.float_,
-                **NUMBER_EXTRA,
-            }),
-            cv.Optional(CONF_PI_OUTPUT_MIN_OFF_NUMBER): number.number_schema(
-                SunsterPiOutputMinOffNumber,
-                unit_of_measurement=UNIT_PERCENT,
-                icon="mdi:minus-circle",
-                entity_category="config",
-            ).extend({
-                cv.Optional("min_value", default=0.0): cv.float_,
-                cv.Optional("max_value", default=20.0): cv.float_,
-                cv.Optional("step", default=1.0): cv.float_,
-                **NUMBER_EXTRA,
-            }),
-            cv.Optional(CONF_PI_OUTPUT_MIN_ON_NUMBER): number.number_schema(
-                SunsterPiOutputMinOnNumber,
-                unit_of_measurement=UNIT_PERCENT,
-                icon="mdi:plus-circle",
-                entity_category="config",
-            ).extend({
-                cv.Optional("min_value", default=5.0): cv.float_,
-                cv.Optional("max_value", default=50.0): cv.float_,
-                cv.Optional("step", default=1.0): cv.float_,
                 **NUMBER_EXTRA,
             }),
             cv.Optional(CONF_PI_MIN_ON_TIME_NUMBER): number.number_schema(
@@ -526,11 +462,6 @@ async def to_code(config):
     cg.add(var.set_pi_kp(config["pi_kp"]))
     cg.add(var.set_pi_ki(config["pi_ki"]))
     cg.add(var.set_pi_kd(config["pi_kd"]))
-    cg.add(var.set_pi_off_delay(config["pi_off_delay"]))
-    cg.add(var.set_pi_output_min_off(config["pi_output_min_off"]))
-    cg.add(var.set_pi_output_min_on(config["pi_output_min_on"]))
-    if "pi_on_delay" in config:
-        cg.add(var.set_pi_on_delay(config["pi_on_delay"]))
     if "pi_min_on_time" in config:
         cg.add(var.set_pi_min_on_time(config["pi_min_on_time"]))
     cg.add(var.set_t_lookahead(config[CONF_T_LOOKAHEAD]))
@@ -691,31 +622,11 @@ async def to_code(config):
         num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
         cg.add(num.set_sunster_heater(var))
         cg.add(var.set_pi_kd_number(num))
-    if CONF_PI_OFF_DELAY_NUMBER in config:
-        num_config = config[CONF_PI_OFF_DELAY_NUMBER]
-        num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
-        cg.add(num.set_sunster_heater(var))
-        cg.add(var.set_pi_off_delay_number(num))
-    if CONF_PI_ON_DELAY_NUMBER in config:
-        num_config = config[CONF_PI_ON_DELAY_NUMBER]
-        num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
-        cg.add(num.set_sunster_heater(var))
-        cg.add(var.set_pi_on_delay_number(num))
     if CONF_TARGET_TEMPERATURE_NUMBER in config:
         num_config = config[CONF_TARGET_TEMPERATURE_NUMBER]
         num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
         cg.add(num.set_sunster_heater(var))
         cg.add(var.set_target_temperature_number(num))
-    if CONF_PI_OUTPUT_MIN_OFF_NUMBER in config:
-        num_config = config[CONF_PI_OUTPUT_MIN_OFF_NUMBER]
-        num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
-        cg.add(num.set_sunster_heater(var))
-        cg.add(var.set_pi_output_min_off_number(num))
-    if CONF_PI_OUTPUT_MIN_ON_NUMBER in config:
-        num_config = config[CONF_PI_OUTPUT_MIN_ON_NUMBER]
-        num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
-        cg.add(num.set_sunster_heater(var))
-        cg.add(var.set_pi_output_min_on_number(num))
     if CONF_PI_MIN_ON_TIME_NUMBER in config:
         num_config = config[CONF_PI_MIN_ON_TIME_NUMBER]
         num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])

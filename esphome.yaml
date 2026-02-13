@@ -1,6 +1,6 @@
 esphome:
-  name: van-heizung
-  friendly_name: van-heizung
+  name: van-heater
+  friendly_name: van-heater
 
 esp32:
   board: esp32dev
@@ -10,7 +10,7 @@ esp32:
 external_components:
   - source: github://ElektronB/esphome-sunster-heater@main
     components: [sunster_heater]
-    refresh: 0s  # Einmalig: Cache neu laden, danach z.B. 1d
+    refresh: 0s  # One-time cache refresh; then e.g. 1d
 
 logger:
   level: DEBUG
@@ -37,40 +37,36 @@ uart:
     inverted: true
   baud_rate: 4800
 
-# 1-Wire Bus (DS18B20 o.ä.) – 4,7 kΩ Pull-up zwischen Data und 3,3 V
-# Pin: GPIO4, GPIO32 oder GPIO33 (ESP32: nur Pins mit Ein+Ausgang; GPIO28 existiert am ESP32 nicht)
+# 1-Wire bus (DS18B20 etc.) – 4.7 kΩ pull-up between data and 3.3 V
+# Pin: GPIO4, GPIO32 or GPIO33 (ESP32: input+output capable pins only)
 one_wire:
   - platform: gpio
     pin: GPIO32
     id: one_wire_bus
 
 sensor:
-  # Index 0 = Raumtemperatur (für PI-Regelung), Index 1 = Luftauslass
-  # Bei mehreren Sensoren besser address: 0x... aus dem Log verwenden (stabil)
+  # Room temperature for PI control; use address from log if you have multiple sensors
   - platform: dallas_temp
     one_wire_id: one_wire_bus
     address: 0xd43ce1e3810bed28
-    id: raumtemperatur
-    name: "Raumtemperatur"
-    update_interval: 5s   # Alle 5s für PI-Prädiktion
-    resolution: 12       # 12-bit, float durchgängig in Regler
+    id: room_temperature
+    name: "Room Temperature"
+    update_interval: 5s   # 5s for PI prediction
+    resolution: 12       # 12-bit, float throughout in controller
     filters:
       - filter_out: nan
 
 sunster_heater:
   id: my_heater
   uart_id: heater_uart
-  # passive_sniff: true   # Nur RX loggen + Decode, kein Senden (nur wenn Komponente diese Option hat)
+  # passive_sniff: true   # Log RX/decode only, no TX
   control_mode: automatic
-  external_temperature_sensor: raumtemperatur
+  external_temperature_sensor: room_temperature
   target_temperature: 18.0
-  # PID-Regler (abgestimmt auf ~0,5°C/min Aufheizung): Stellwert 0–100 %, unter min_off aus, ab min_on ein
+  # PI controller: output ±100%, on/off via thresholds
   pi_kp: 20.0
   pi_ki: 0.15
   pi_kd: 1.0
-  pi_off_delay: 30.0
-  pi_output_min_off: 3.0
-  pi_output_min_on: 10.0
   t_lookahead: 90
   slope_window: 45
   output_off_threshold: -10
@@ -82,70 +78,40 @@ sunster_heater:
   injected_per_pulse: 0.022
 
   power_switch:
-    name: "Heizung Ein-Aus"
+    name: "Heater On-Off"
   power_level_number:
-    name: "Heizung Leistung"
+    name: "Heater Power"
     mode: slider
   control_mode_select:
-    name: "Heizung Modus"
+    name: "Heater Mode"
 
-  # Automatik-Modus: PI-Regler + Hysterese (UI-einstellbar)
+  # Automatic mode: PI controller, thresholds, prediction (UI configurable)
   pi_kp_number:
-    name: "Heizung PI Kp"
+    name: "Heater PI Kp"
     mode: box
     restore_value: true  # Saves value to flash
     optimistic: true
     initial_value: 20
   pi_ki_number:
-    name: "Heizung PI Ki"
+    name: "Heater PI Ki"
     mode: box
     restore_value: true  # Saves value to flash
     optimistic: true
     initial_value: 0.1
   pi_kd_number:
-    name: "Heizung PI Kd"
+    name: "Heater PI Kd"
     mode: box
     restore_value: true  # Saves value to flash
     optimistic: true
     initial_value: 0.2
-  pi_off_delay_number:
-    name: "Heizung Abschalt-Verzögerung (s)"
-    mode: box
-    restore_value: true  # Saves value to flash
-    optimistic: true
-    initial_value: 60
-    min_value: 0
-    max_value: 600
-    step: 10
-  pi_on_delay_number:
-    name: "Heizung Einschalt-Verzögerung (s)"
-    mode: box
-    restore_value: true
-    optimistic: true
-    initial_value: 30
-    min_value: 0
-    max_value: 600
-    step: 5
   target_temperature_number:
-    name: "Heizung Solltemperatur"
+    name: "Heater Target Temperature"
     mode: slider
     restore_value: true  # Saves value to flash
     optimistic: true
     initial_value: 21
-  pi_output_min_off_number:
-    name: "Heizung Hysterese Aus (Stellwert %)"
-    mode: box
-    restore_value: true  # Saves value to flash
-    optimistic: true
-    initial_value: 3
-  pi_output_min_on_number:
-    name: "Heizung Hysterese Ein (Stellwert %)"
-    mode: box
-    restore_value: true  # Saves value to flash
-    optimistic: true
-    initial_value: 10
   pi_min_on_time_number:
-    name: "Heizung Min-On-Zeit (s)"
+    name: "Heater Min-On Time (s)"
     mode: box
     restore_value: true
     optimistic: true
@@ -154,7 +120,7 @@ sunster_heater:
     max_value: 300
     step: 5
   t_lookahead_number:
-    name: "Heizung Vorausschau (s)"
+    name: "Heater Lookahead (s)"
     mode: box
     restore_value: true
     optimistic: true
@@ -163,7 +129,7 @@ sunster_heater:
     max_value: 300
     step: 5
   slope_window_number:
-    name: "Heizung Steigungsfenster (s)"
+    name: "Heater Slope Window (s)"
     mode: box
     restore_value: true
     optimistic: true
@@ -172,7 +138,7 @@ sunster_heater:
     max_value: 120
     step: 5
   output_off_threshold_number:
-    name: "Heizung Regler Aus-Schwelle (%)"
+    name: "Heater Off Threshold (%)"
     mode: box
     restore_value: true
     optimistic: true
@@ -181,7 +147,7 @@ sunster_heater:
     max_value: 0
     step: 1
   output_on_threshold_number:
-    name: "Heizung Regler Ein-Schwelle (%)"
+    name: "Heater On Threshold (%)"
     mode: box
     restore_value: true
     optimistic: true

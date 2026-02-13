@@ -67,13 +67,13 @@ void SunsterHeater::setup() {
     hourly_consumption_sensor_->publish_state(0.0f);
   }
   
-  // Register callback for external temperature sensor to trigger PID controller only on new values
+  // Register callback for external temperature sensor to trigger PI controller only on new values
   if (external_temperature_sensor_) {
     external_temperature_sensor_->add_on_state_callback([this](float state) {
-      // Prüfe auf gültigen Wert: NaN und Plausibilitätsprüfung (-50°C bis +100°C)
+      // Validate: NaN and plausibility (-50°C to +100°C)
       if (std::isnan(state) || state < -50.0f || state > 100.0f) {
-        ESP_LOGW(TAG, "[PID] Invalid sensor value received: %.1f°C, skipping PID calculation", state);
-        return;  // PID-Berechnung überspringen
+        ESP_LOGW(TAG, "[PI] Invalid sensor value received: %.1f°C, skipping PI calculation", state);
+        return;
       }
       
       external_temperature_ = state;
@@ -83,12 +83,12 @@ void SunsterHeater::setup() {
         ESP_LOGI(TAG, "External temperature sensor recovered, resetting grace period");
         time_external_temp_lost_ = 0;
       }
-      // Trigger PID controller only if in automatic mode and not running autotune
+      // Trigger PI controller only if in automatic mode and not running autotune
       if (control_mode_ == ControlMode::AUTOMATIC && autotune_state_ != AutotuneState::AUTOTUNE_RUNNING) {
         handle_automatic_mode();
       }
     });
-    ESP_LOGD(TAG, "Registered callback for external temperature sensor - PID will run only on new values");
+    ESP_LOGD(TAG, "Registered callback for external temperature sensor - PI will run only on new values");
   }
   
   ESP_LOGCONFIG(TAG, "Sunster Heater setup completed");
@@ -109,7 +109,7 @@ void SunsterHeater::setup() {
 
 void SunsterHeater::update() {
   // Update external temperature reading if sensor is available
-  // Note: PID-Regler wird über Callback ausgelöst, nicht hier
+  // Note: PI controller is triggered by sensor callback, not here
   if (external_temperature_sensor_ != nullptr && external_temperature_sensor_->has_state()) {
     float new_temp = external_temperature_sensor_->state;
     // Track temperature change (for fallback, but callback is primary mechanism)
@@ -139,9 +139,9 @@ void SunsterHeater::update() {
   if (autotune_state_ == AutotuneState::AUTOTUNE_RUNNING) {
     handle_autotune();
   } else {
-    // Handle automatic mode (PI controller) - nur wenn kein Callback registriert ist
-    // (Callback-Mechanismus wird in setup() registriert und ist effizienter)
-    // Fallback für den Fall, dass Callback nicht funktioniert:
+    // Handle automatic mode (PI controller) - only when no callback is registered
+    // (callback is registered in setup() and is the primary trigger)
+    // Fallback if callback does not fire:
     if (control_mode_ == ControlMode::AUTOMATIC && external_temperature_sensor_ == nullptr) {
       handle_automatic_mode();
     } else if (pi_output_sensor_ && control_mode_ != ControlMode::AUTOMATIC) {
@@ -401,7 +401,7 @@ void SunsterHeater::process_heater_frame(const std::vector<uint8_t> &frame) {
     if (new_state != current_state_) {
       if (new_state == HeaterState::STABLE_COMBUSTION) {
         time_stable_combustion_entered_ = millis();
-        last_pi_time_ = 0;  // so first PID step uses default dt_s
+        last_pi_time_ = 0;  // so first PI step uses default dt_s
       } else {
         time_stable_combustion_entered_ = 0;
       }
@@ -756,30 +756,10 @@ void SunsterHeater::publish_all_config_entities_() {
     pi_kd_number_->publish_state(v);
     ESP_LOGD(TAG, "[CONFIG] push PI Kd = %.2f", v);
   }
-  if (pi_off_delay_number_) {
-    float v = sanitize(pi_off_delay_, 60.0f);
-    pi_off_delay_number_->publish_state(v);
-    ESP_LOGD(TAG, "[CONFIG] push PI OffDelay = %.0f", v);
-  }
-  if (pi_on_delay_number_) {
-    float v = sanitize(pi_on_delay_s_, 30.0f);
-    pi_on_delay_number_->publish_state(v);
-    ESP_LOGD(TAG, "[CONFIG] push PI OnDelay = %.0f s", v);
-  }
   if (target_temperature_number_) {
     float v = sanitize(target_temperature_, 20.0f);
     target_temperature_number_->publish_state(v);
     ESP_LOGD(TAG, "[CONFIG] push TargetTemp = %.1f", v);
-  }
-  if (pi_output_min_off_number_) {
-    float v = sanitize(pi_output_min_off_, 3.0f);
-    pi_output_min_off_number_->publish_state(v);
-    ESP_LOGD(TAG, "[CONFIG] push PI MinOff = %.1f", v);
-  }
-  if (pi_output_min_on_number_) {
-    float v = sanitize(pi_output_min_on_, 15.0f);
-    pi_output_min_on_number_->publish_state(v);
-    ESP_LOGD(TAG, "[CONFIG] push PI MinOn = %.1f", v);
   }
   if (pi_min_on_time_number_) {
     float v = sanitize(pi_min_on_time_s_, 30.0f);
@@ -987,26 +967,22 @@ void SunsterHeater::handle_antifreeze_mode() {
 }
 
 void SunsterHeater::handle_automatic_mode() {
-  // Frühe Validierung: Prüfe auf gültigen Sensorwert BEVOR PID-Berechnung
+  // Early validation: check sensor value before PI calculation
   bool sensor_has_state = (external_temperature_sensor_ != nullptr && external_temperature_sensor_->has_state());
-  bool sensor_has_valid_value = !std::isnan(external_temperature_) && 
-                                external_temperature_ >= -50.0f && 
+  bool sensor_has_valid_value = !std::isnan(external_temperature_) &&
+                                external_temperature_ >= -50.0f &&
                                 external_temperature_ <= 100.0f;
-  
-  // Wenn kein gültiger Wert vorhanden ist, PID überspringen
+
   if (!sensor_has_valid_value) {
     if (sensor_has_state) {
-      // Sensor hat State, aber Wert ist ungültig (NaN oder außerhalb Bereich)
-      ESP_LOGW(TAG, "[PID] Invalid sensor value (%.1f°C), skipping PID calculation", external_temperature_);
+      ESP_LOGW(TAG, "[PI] Invalid sensor value (%.1f°C), skipping PI calculation", external_temperature_);
     }
-    // PID-Output auf 0 setzen
     last_pi_output_ = 0.0f;
     if (pi_output_sensor_) pi_output_sensor_->publish_state(0.0f);
     time_entered_off_region_ = 0;
-    // Grace-Period-Logik beibehalten für den Fall, dass Sensor wieder kommt
     if (!sensor_has_state && time_external_temp_lost_ == 0) {
       time_external_temp_lost_ = millis();
-      ESP_LOGW(TAG, "[PID] Sensor lost signal, starting %ds grace period", PI_SENSOR_GRACE_PERIOD_MS / 1000);
+      ESP_LOGW(TAG, "[PI] Sensor lost signal, starting %ds grace period", PI_SENSOR_GRACE_PERIOD_MS / 1000);
     }
     return;
   }
@@ -1017,13 +993,13 @@ void SunsterHeater::handle_automatic_mode() {
     uint32_t now = millis();
     if (time_external_temp_lost_ == 0) {
       time_external_temp_lost_ = now;
-      ESP_LOGW(TAG, "[PID] Sensor lost signal, starting %ds grace period (using last valid temp=%.1f°C)", 
+      ESP_LOGW(TAG, "[PI] Sensor lost signal, starting %ds grace period (using last valid temp=%.1f°C)", 
                PI_SENSOR_GRACE_PERIOD_MS / 1000, external_temperature_);
     } else {
       uint32_t elapsed = now - time_external_temp_lost_;
       if (elapsed >= PI_SENSOR_GRACE_PERIOD_MS) {
         // Grace period expired - force shutdown
-        ESP_LOGW(TAG, "[PID] Sensor grace period expired (%ds), forcing shutdown", PI_SENSOR_GRACE_PERIOD_MS / 1000);
+        ESP_LOGW(TAG, "[PI] Sensor grace period expired (%ds), forcing shutdown", PI_SENSOR_GRACE_PERIOD_MS / 1000);
         if (heater_enabled_) {
           turn_off();
         }
@@ -1033,7 +1009,7 @@ void SunsterHeater::handle_automatic_mode() {
         return;
       } else {
         // Still in grace period - continue with last valid temperature
-        ESP_LOGD(TAG, "[PID] Sensor offline, using last valid temp=%.1f°C (grace period: %ds remaining)", 
+        ESP_LOGD(TAG, "[PI] Sensor offline, using last valid temp=%.1f°C (grace period: %ds remaining)", 
                  external_temperature_, (PI_SENSOR_GRACE_PERIOD_MS - elapsed) / 1000);
       }
     }
@@ -1049,7 +1025,7 @@ void SunsterHeater::handle_automatic_mode() {
   }
 
   if (!automatic_master_enabled_) {
-    // Power switch OFF – PID must not turn on; keep output 0
+    // Power switch OFF – PI must not turn on; keep output 0
     if (heater_enabled_) {
       turn_off();
     }
@@ -1059,21 +1035,21 @@ void SunsterHeater::handle_automatic_mode() {
     return;
   }
 
-  // Cooldown: PID bei 0%, kein Integral-Windup
+  // Cooldown: output 0%, no integral windup
   if (current_state_ == HeaterState::STOPPING_COOLING) {
     last_pi_output_ = 0.0f;
     if (pi_output_sensor_) pi_output_sensor_->publish_state(0.0f);
     time_entered_off_region_ = 0;
-    ESP_LOGV(TAG, "[PID] soll=%.1f ist=%.1f out=0.0 (state=Cooldown) no windup", target_temperature_, external_temperature_);
+    ESP_LOGV(TAG, "[PI] target=%.1f measured=%.1f out=0.0 (state=Cooldown) no windup", target_temperature_, external_temperature_);
     return;
   }
-  // Preheat (vor stabile Verbrennung): Leistung nicht regelbar, Regler auf Min 10%
+  // Preheat (before stable combustion): power fixed at min 10%
   if (current_state_ == HeaterState::POLLING_STATE || current_state_ == HeaterState::HEATING_UP) {
     const float preheat_output = 10.0f;
     last_pi_output_ = preheat_output;
     if (pi_output_sensor_) pi_output_sensor_->publish_state(preheat_output);
     time_entered_off_region_ = 0;
-    ESP_LOGV(TAG, "[PID] soll=%.1f ist=%.1f out=%.0f (state=Preheat, min) no windup", target_temperature_, external_temperature_, preheat_output);
+    ESP_LOGV(TAG, "[PI] target=%.1f measured=%.1f out=%.0f (state=Preheat, min) no windup", target_temperature_, external_temperature_, preheat_output);
     return;
   }
 
@@ -1082,7 +1058,7 @@ void SunsterHeater::handle_automatic_mode() {
   if (dt_s <= 0.0f) dt_s = 5.0f;
   last_pi_time_ = now;
 
-  // Steigung und Prädiktion (immer aktiv, float durchgängig)
+  // Slope and prediction (always active, float throughout)
   bool prev_valid = !std::isnan(temp_prev_) && time_prev_ != 0;
   if (prev_valid && dt_s > 0.0f) {
     float slope_raw = (external_temperature_ - temp_prev_) / dt_s;
@@ -1095,7 +1071,7 @@ void SunsterHeater::handle_automatic_mode() {
   float t_pred = external_temperature_ + slope_filtered_ * t_lookahead_s_;
   float error = target_temperature_ - t_pred;
 
-  // Reiner PI (kein D), Ausgabe ±100%; Anti-Windup: Integral nur wenn nicht am Limit
+  // Pure PI (no D), output ±100%; anti-windup: integrate only when not at limit
   float output_raw = std::max(-100.0f, std::min(100.0f, pi_kp_ * error + pi_integral_));
   if (output_raw > -100.0f && output_raw < 100.0f) {
     pi_integral_ += pi_ki_ * error * dt_s;
@@ -1105,15 +1081,15 @@ void SunsterHeater::handle_automatic_mode() {
   last_pi_output_ = output_raw;
   if (pi_output_sensor_) pi_output_sensor_->publish_state(output_raw);
 
-  bool soll_unter_ist = (target_temperature_ < external_temperature_);
-  ESP_LOGV(TAG, "[PI] soll=%.2f ist=%.2f T_pred=%.2f slope=%.4f err=%.2f out_raw=%.1f off_thr=%.0f on_thr=%.0f",
+  bool target_below_measured = (target_temperature_ < external_temperature_);
+  ESP_LOGV(TAG, "[PI] target=%.2f measured=%.2f T_pred=%.2f slope=%.4f err=%.2f out_raw=%.1f off_thr=%.0f on_thr=%.0f",
            target_temperature_, external_temperature_, t_pred, slope_filtered_, error, output_raw,
            output_off_threshold_, output_on_threshold_);
 
-  // Nicht STABLE_COMBUSTION: nur Ein-Schwelle prüfen (kein Delay)
+  // Not STABLE_COMBUSTION: only check on-threshold (no delay)
   if (current_state_ != HeaterState::STABLE_COMBUSTION) {
     time_entered_off_region_ = 0;
-    if (!heater_enabled_ && output_raw > output_on_threshold_ && !soll_unter_ist) {
+    if (!heater_enabled_ && output_raw > output_on_threshold_ && !target_below_measured) {
       turn_on();
       time_entered_on_region_ = 0;
     } else if (time_entered_on_region_ != 0) {
@@ -1122,7 +1098,7 @@ void SunsterHeater::handle_automatic_mode() {
     return;
   }
 
-  // STABLE_COMBUSTION: Ein/Aus nur über Schwellen
+  // STABLE_COMBUSTION: on/off only via thresholds
   if (output_raw < output_off_threshold_) {
     if (heater_enabled_) {
       uint32_t stable_elapsed = (time_stable_combustion_entered_ != 0) ? (now - time_stable_combustion_entered_) : 0;
@@ -1141,7 +1117,7 @@ void SunsterHeater::handle_automatic_mode() {
   time_entered_on_region_ = 0;
 
   if (output_raw > output_on_threshold_) {
-    if (!heater_enabled_ && !soll_unter_ist) turn_on();
+    if (!heater_enabled_ && !target_below_measured) turn_on();
     if (heater_enabled_) {
       float pct = (output_raw <= 10.0f) ? 10.0f
                   : static_cast<float>((static_cast<int>(output_raw / 10.0f + 0.5f)) * 10);
@@ -1149,7 +1125,7 @@ void SunsterHeater::handle_automatic_mode() {
       set_power_level_percent(pct);
     }
   } else {
-    // Zwischen off_threshold und on_threshold: Zustand halten, wenn an dann Min-Leistung
+    // Between off_threshold and on_threshold: hold state, if on use min power
     if (heater_enabled_) set_power_level_percent(10.0f);
   }
 }
@@ -1232,14 +1208,14 @@ bool SunsterHeater::turn_on() {
       ESP_LOGE(TAG, "Cannot turn on heater: automatic mode requires external temperature sensor!");
       return false;
     }
-    // Im Automatikmodus: Heizung nicht physisch starten wenn Soll < Ist (Schalter bleibt ON, nur PID rechnet)
-    // Ausnahme: während Autotune darf die Heizung starten
+    // In automatic mode: do not physically start heater when target < measured (switch stays ON, PI keeps computing)
+    // Exception: during Autotune the heater may start
     if (autotune_state_ != AutotuneState::AUTOTUNE_RUNNING &&
         !std::isnan(external_temperature_) && external_temperature_ >= -50.0f && external_temperature_ <= 100.0f &&
         target_temperature_ < external_temperature_) {
-      ESP_LOGD(TAG, "Heater start deferred: Soll (%.1f°C) < Ist (%.1f°C), switch ON, PID active until ist < soll",
+      ESP_LOGD(TAG, "Heater start deferred: target (%.1f°C) < measured (%.1f°C), switch ON, PI active until measured < target",
                target_temperature_, external_temperature_);
-      return true;  // Schalter bleibt ON, heater_enabled_ bleibt false bis PID bei ist < soll startet
+      return true;  // Switch stays ON, heater_enabled_ stays false until PI starts when measured < target
     }
   }
   
@@ -1264,9 +1240,8 @@ bool SunsterHeater::turn_on() {
 
 void SunsterHeater::turn_off() {
   heater_enabled_ = false;
-  // Leistung nicht auf 0 setzen, damit Restart im Automatikmodus funktioniert
-  // power_level_ bleibt erhalten (wird beim turn_on() auf default_power_percent_ gesetzt)
-  ESP_LOGI(TAG, "Heater turned OFF (power_level bleibt bei %d = %.0f%%)", power_level_, power_level_ * 10.0f);
+  // Do not set power_level_ to 0 so restart in automatic mode works (set on turn_on())
+  ESP_LOGI(TAG, "Heater turned OFF (power_level remains %d = %.0f%%)", power_level_, power_level_ * 10.0f);
 }
 
 void SunsterHeater::set_power_level_percent(float percent) {
@@ -1284,8 +1259,8 @@ void SunsterHeater::dump_config() {
                 control_mode_ == ControlMode::AUTOMATIC ? "Automatic (PI)" :
                 control_mode_ == ControlMode::ANTIFREEZE ? "Antifreeze" : "Manual");
   if (control_mode_ == ControlMode::AUTOMATIC) {
-    ESP_LOGCONFIG(TAG, "  PI: Kp=%.2f Ki=%.2f, output off<%.0f%% on>=%.0f%%",
-                  pi_kp_, pi_ki_, pi_output_min_off_, pi_output_min_on_);
+    ESP_LOGCONFIG(TAG, "  PI: Kp=%.2f Ki=%.2f, thresholds off<%.0f%% on>%.0f%%, lookahead=%.0fs",
+                  pi_kp_, pi_ki_, output_off_threshold_, output_on_threshold_, t_lookahead_s_);
   }
   ESP_LOGCONFIG(TAG, "  Default Power Level: %.0f%%", default_power_percent_);
   ESP_LOGCONFIG(TAG, "  Power Level: %d/10", power_level_);
@@ -1496,11 +1471,11 @@ void SunsterHeater::handle_autotune() {
             float kp = 0.6f * ku;
             float ki = 1.2f * ku / mean_period;
             
-            // Kd-Formel für träge Systeme anpassen (Option B: Skalierung für lange Perioden)
+            // Scale Kd for slow systems (Option B: scaling for long periods)
             float kd = 0.075f * ku * mean_period;
-            // Für träge Systeme: zusätzliche Reduzierung bei Perioden > 300s
+            // For slow systems: extra reduction when period > 300s
             if (mean_period > 300.0f) {
-              kd = kd * (300.0f / mean_period);  // Skaliert runter für lange Perioden
+              kd = kd * (300.0f / mean_period);  // Scale down for long periods
             }
             
             ESP_LOGI(TAG, "[AUTOTUNE] Calculation complete:");
@@ -1509,15 +1484,15 @@ void SunsterHeater::handle_autotune() {
             ESP_LOGI(TAG, "  K_u: %.2f", ku);
             ESP_LOGI(TAG, "  Calculated PID (raw): Kp=%.2f Ki=%.5f Kd=%.2f", kp, ki, kd);
             
-            // Grenzenprüfung (entsprechend __init__.py)
+            // Clamp to allowed range (match __init__.py)
             kp = std::clamp(kp, 0.1f, 50.0f);
             ki = std::clamp(ki, 0.0f, 5.0f);
             kd = std::clamp(kd, 0.0f, 50.0f);
             
-            // Rundung auf sinnvolle Dezimalstellen (entsprechend step-Werten)
-            kp = roundf(kp / 0.5f) * 0.5f;  // Auf 0.5 Schritte
-            ki = roundf(ki / 0.01f) * 0.01f;  // Auf 0.01 Schritte
-            kd = roundf(kd / 0.1f) * 0.1f;  // Auf 0.1 Schritte
+            // Round to sensible decimals (match UI step values)
+            kp = roundf(kp / 0.5f) * 0.5f;   // Step 0.5
+            ki = roundf(ki / 0.01f) * 0.01f;  // Step 0.01
+            kd = roundf(kd / 0.1f) * 0.1f;   // Step 0.1
             
             ESP_LOGI(TAG, "[AUTOTUNE] Final PID (after clamping/rounding): Kp=%.2f Ki=%.2f Kd=%.2f", kp, ki, kd);
             
