@@ -32,7 +32,6 @@ sunster_heater_ns = cg.esphome_ns.namespace("sunster_heater")
 SunsterHeater = sunster_heater_ns.class_("SunsterHeater", cg.PollingComponent)
 SunsterInjectedPerPulseNumber = sunster_heater_ns.class_("SunsterInjectedPerPulseNumber", number.Number, cg.Component)
 SunsterResetTotalConsumptionButton = sunster_heater_ns.class_("SunsterResetTotalConsumptionButton", button.Button, cg.Component)
-SunsterPidAutotuneButton = sunster_heater_ns.class_("SunsterPidAutotuneButton", button.Button, cg.Component)
 SunsterControlModeSelect = sunster_heater_ns.class_("SunsterControlModeSelect", select.Select, cg.Component)
 SunsterHeaterPowerSwitch = sunster_heater_ns.class_("SunsterHeaterPowerSwitch", switch.Switch, cg.Component)
 SunsterHeaterPowerLevelNumber = sunster_heater_ns.class_("SunsterHeaterPowerLevelNumber", number.Number, cg.Component)
@@ -58,7 +57,6 @@ CONF_INJECTED_PER_PULSE_NUMBER = "injected_per_pulse_number"
 CONF_PASSIVE_SNIFF = "passive_sniff"
 CONF_POLLING_INTERVAL = "polling_interval"
 CONF_RESET_TOTAL_CONSUMPTION_BUTTON = "reset_total_consumption_button"
-CONF_PID_AUTOTUNE_BUTTON = "pid_autotune_button"
 CONF_POWER_SWITCH = "power_switch"
 CONF_POWER_LEVEL_NUMBER = "power_level_number"
 CONF_PI_KP_NUMBER = "pi_kp_number"
@@ -279,20 +277,6 @@ CONFIG_SCHEMA = cv.All(
                 icon="mdi:restart",
                 entity_category="config",
             ),
-            cv.Optional(CONF_PID_AUTOTUNE_BUTTON): button.button_schema(
-                SunsterPidAutotuneButton,
-                icon="mdi:tune-variant",
-                entity_category="config",
-            ),
-            cv.Optional("autotune_high_percent", default=80.0): cv.float_range(
-                min=10.0, max=100.0
-            ),
-            cv.Optional("autotune_max_duration_min", default=90): cv.int_range(
-                min=30, max=180
-            ),
-            cv.Optional("autotune_min_zero_crossings", default=4): cv.int_range(
-                min=2, max=10
-            ),
             cv.Optional(CONF_CONTROL_MODE_SELECT): select.select_schema(
                 SunsterControlModeSelect,
                 icon="mdi:format-list-bulleted",
@@ -469,11 +453,6 @@ async def to_code(config):
     cg.add(var.set_output_off_threshold(config[CONF_OUTPUT_OFF_THRESHOLD]))
     cg.add(var.set_output_on_threshold(config[CONF_OUTPUT_ON_THRESHOLD]))
 
-    # Set autotune parameters
-    cg.add(var.set_autotune_high_percent(config["autotune_high_percent"]))
-    cg.add(var.set_autotune_max_duration_min(config["autotune_max_duration_min"]))
-    cg.add(var.set_autotune_min_zero_crossings(config["autotune_min_zero_crossings"]))
-
     # Set time component if provided
     if CONF_TIME_ID in config:
         time_component = await cg.get_variable(config[CONF_TIME_ID])
@@ -578,11 +557,6 @@ async def to_code(config):
     # Button component for resetting total consumption
     if CONF_RESET_TOTAL_CONSUMPTION_BUTTON in config:
         btn = await button.new_button(config[CONF_RESET_TOTAL_CONSUMPTION_BUTTON])
-        cg.add(btn.set_sunster_heater(var))
-
-    # Button component for PID autotune
-    if CONF_PID_AUTOTUNE_BUTTON in config:
-        btn = await button.new_button(config[CONF_PID_AUTOTUNE_BUTTON])
         cg.add(btn.set_sunster_heater(var))
 
     # Select component for control mode

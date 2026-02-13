@@ -168,5 +168,3 @@ sunster_heater:
 
   reset_total_consumption_button:
     name: "Reset Total Fuel Consumption"
-  pid_autotune_button:
-    name: "PID Auto-Tune"
