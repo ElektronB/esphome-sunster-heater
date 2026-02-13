@@ -1071,9 +1071,15 @@ void SunsterHeater::handle_automatic_mode() {
   if (predicted_temperature_sensor_) predicted_temperature_sensor_->publish_state(t_pred);
   if (slope_sensor_) slope_sensor_->publish_state(slope_filtered_);
 
-  // Pure PI (no D), output ±100%; anti-windup: integrate only when not at limit
+  // Pure PI (no D), output ±100%; anti-windup
   float output_raw = std::max(-100.0f, std::min(100.0f, pi_kp_ * error + pi_integral_));
-  if (output_raw > -100.0f && output_raw < 100.0f) {
+  if (!heater_enabled_ && output_raw < output_off_threshold_) {
+    // Heater off: clamp integral so I doesn't wind down further; ready to turn on quickly
+    float integral_min = output_off_threshold_ - pi_kp_ * error;
+    pi_integral_ = std::max(pi_integral_, integral_min);
+    pi_integral_ = std::max(-PI_INTEGRAL_MAX, std::min(PI_INTEGRAL_MAX, pi_integral_));
+    output_raw = std::max(output_off_threshold_, pi_kp_ * error + pi_integral_);
+  } else if (output_raw > -100.0f && output_raw < 100.0f) {
     pi_integral_ += pi_ki_ * error * dt_s;
     pi_integral_ = std::max(-PI_INTEGRAL_MAX, std::min(PI_INTEGRAL_MAX, pi_integral_));
   }
