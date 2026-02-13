@@ -5,11 +5,11 @@
 namespace esphome {
 namespace sunster_heater {
 
-static const char *const TAG = "sunster_climate";
+static const char *const CLIMATE_TAG = "sunster_climate";
 
 void SunsterClimate::setup() {
   if (heater_ == nullptr) {
-    ESP_LOGE(TAG, "SunsterHeater not set");
+    ESP_LOGE(CLIMATE_TAG, "SunsterHeater not set");
     return;
   }
   // Initial state sync

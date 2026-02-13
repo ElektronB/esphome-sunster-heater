@@ -10,7 +10,7 @@ namespace sunster_heater {
 
 class SunsterHeater;
 
-class SunsterClimate : public climate::Climate, public PollingComponent, public Component {
+class SunsterClimate : public climate::Climate, public PollingComponent {
  public:
   void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
   void set_min_temperature(float min_temp) { min_temperature_ = min_temp; }
