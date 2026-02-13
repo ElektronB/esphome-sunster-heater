@@ -536,12 +536,17 @@ sunster_heater:
 ## Home Assistant Integration
 
 ### Climate Entity
-- Will be implemented
-<!-- The climate platform creates a native Home Assistant thermostat with:
-- Current temperature display
-- Target temperature control
-- Heat/Off mode switching
-- Visual temperature controls -->
+Die Climate-Plattform erstellt eine native Home-Assistant-Thermostat-Entity mit:
+- Aktueller Raumtemperatur (vom externen Sensor)
+- Solltemperatur-Steuerung
+- Heat/Off-Modus
+- Heizstatus (Heating/Idle/Off)
+
+**Thermostat-Karte im Dashboard:** Für die klassische Thermostat-UI eine Karte hinzufügen:
+```yaml
+type: thermostat
+entity: climate.van_heater  # Entity-ID ggf. in Einstellungen → Geräte prüfen
+```
 
 ### Sensor Entities
 - All sensors appear as individual entities with:

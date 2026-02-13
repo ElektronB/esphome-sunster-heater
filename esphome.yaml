@@ -98,12 +98,7 @@ sunster_heater:
     restore_value: true  # Saves value to flash
     optimistic: true
     initial_value: 0.1
-  target_temperature_number:
-    name: "Heater Target Temperature"
-    mode: box   
-    restore_value: true  # Saves value to flash
-    optimistic: true
-    initial_value: 21
+  # target_temperature_number entfernt – Solltemperatur nur über Climate-Entity
   pi_min_on_time_number:
     name: "Heater Min-On Time (s)"
     mode: box
@@ -163,6 +158,8 @@ sunster_heater:
   reset_total_consumption_button:
     name: "Reset Total Fuel Consumption"
 
+# Climate-Entity für Thermostat-Karte in Home Assistant
+# Dashboard: type: thermostat, entity: climate.van_heater
 climate:
   - platform: sunster_heater
     sunster_heater_id: my_heater
