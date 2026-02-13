@@ -334,6 +334,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_TARGET_TEMPERATURE_NUMBER): number.number_schema(
                 SunsterTargetTemperatureNumber,
                 unit_of_measurement=UNIT_CELSIUS,
+                device_class=DEVICE_CLASS_TEMPERATURE,
                 icon=ICON_THERMOMETER,
                 entity_category="",
             ).extend({
