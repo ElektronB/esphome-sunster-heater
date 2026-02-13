@@ -4,7 +4,6 @@
 #include "esphome/components/climate/climate_mode.h"
 #include "esphome/components/climate/climate_traits.h"
 #include "esphome/core/component.h"
-#include "esphome/core/polling_component.h"
 
 namespace esphome {
 namespace sunster_heater {
