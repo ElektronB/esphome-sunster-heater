@@ -317,6 +317,9 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   float total_consumption_ml_{0.0};
   ESPPreferenceObject pref_fuel_consumption_;
   ESPPreferenceObject pref_config_;
+  bool config_dirty_{false};
+  uint32_t config_last_change_{0};
+  static constexpr uint32_t CONFIG_SAVE_DEBOUNCE_MS = 2000u;
 
   time::RealTimeClock *time_component_{nullptr};
   bool time_sync_warning_shown_{false};

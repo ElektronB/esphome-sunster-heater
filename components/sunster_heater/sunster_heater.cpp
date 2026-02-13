@@ -108,6 +108,12 @@ void SunsterHeater::setup() {
 }
 
 void SunsterHeater::update() {
+  // Deferred config save (avoids blocking control callbacks; NVS write ~25–50 ms)
+  if (config_dirty_ && (millis() - config_last_change_ >= CONFIG_SAVE_DEBOUNCE_MS)) {
+    save_config_data();
+    config_dirty_ = false;
+  }
+
   // Update external temperature reading if sensor is available
   // Note: PI controller is triggered by sensor callback, not here
   if (external_temperature_sensor_ != nullptr && external_temperature_sensor_->has_state()) {
@@ -788,7 +794,8 @@ void SunsterHeater::publish_all_config_entities_() {
 }
 
 void SunsterHeater::save_config_preferences() {
-  save_config_data();
+  config_dirty_ = true;
+  config_last_change_ = millis();
 }
 
 void SunsterHeater::reset_daily_consumption() {
