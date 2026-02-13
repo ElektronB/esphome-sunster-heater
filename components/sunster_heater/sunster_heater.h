@@ -249,6 +249,8 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   uint32_t polling_interval_ms_{DEFAULT_POLLING_INTERVAL_MS};
   bool passive_sniff_mode_{false};  // Only log RX/decode, never send
   bool heater_state_synced_once_{false};  // After first heater frame, sync heater_enabled_ from state so switch can init
+  uint32_t last_start_request_time_{0};   // Don't sync heater_enabled_ to false when OFF during start grace (heater needs ~60s)
+  static constexpr uint32_t START_GRACE_MS = 120000;  // 2 min grace after start before accepting OFF from heater
 
   // Control state
   bool heater_enabled_{false};

@@ -382,8 +382,13 @@ void SunsterHeater::send_controller_frame() {
   
   // Send frame
   this->write_array(frame.data(), frame.size());
-  
-  ESP_LOGV(TAG, "Sent controller frame: enabled=%s, power=%d, state=0x%02X", 
+
+  // Track start command for grace period (heater needs time to start, don't sync OFF too soon)
+  if (heater_enabled_ && (frame[2] == 0x06 || frame[9] == 0x06)) {
+    last_start_request_time_ = millis();
+  }
+
+  ESP_LOGV(TAG, "Sent controller frame: enabled=%s, power=%d, state=0x%02X",
            YESNO(heater_enabled_), power_level_, frame[9]);
 }
 
@@ -409,7 +414,12 @@ void SunsterHeater::process_heater_frame(const std::vector<uint8_t> &frame) {
       current_state_ = new_state;
       ESP_LOGD(TAG, "Heater state changed to: %s", state_to_string(current_state_));
     }
-    
+
+    // Clear start grace when heater has actually started
+    if (current_state_ != HeaterState::OFF && current_state_ != HeaterState::STOPPING_COOLING) {
+      last_start_request_time_ = 0;
+    }
+
     // On first frame after boot: sync heater_enabled_ from heater state so power switch can show correct ON/OFF
     if (!heater_state_synced_once_) {
       heater_state_synced_once_ = true;
@@ -417,10 +427,14 @@ void SunsterHeater::process_heater_frame(const std::vector<uint8_t> &frame) {
       automatic_master_enabled_ = heater_enabled_;
       ESP_LOGD(TAG, "Initial sync: enabled=%s master=%s (heater state %s)", YESNO(heater_enabled_), YESNO(automatic_master_enabled_), state_to_string(current_state_));
     }
-    // After that, only sync enabled -> false when heater has actually stopped (so UI "off" is not overwritten)
+    // After that, only sync enabled -> false when heater has actually stopped.
+    // During start grace (~2 min), ignore OFF from heater (it needs time to start).
     else if ((current_state_ == HeaterState::OFF || current_state_ == HeaterState::STOPPING_COOLING) && heater_enabled_) {
-      heater_enabled_ = false;
-      ESP_LOGD(TAG, "Synced enabled to NO (heater state %s)", state_to_string(current_state_));
+      bool in_grace = (last_start_request_time_ != 0) && (millis() - last_start_request_time_ < START_GRACE_MS);
+      if (!in_grace) {
+        heater_enabled_ = false;
+        ESP_LOGD(TAG, "Synced enabled to NO (heater state %s)", state_to_string(current_state_));
+      }
     }
     
     // Update all sensors
