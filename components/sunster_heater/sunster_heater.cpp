@@ -663,11 +663,11 @@ void SunsterHeater::load_fuel_consumption_data() {
 }
 
 void SunsterHeater::load_config_data() {
-  ESP_LOGI(TAG, "[CONFIG] Reading from flash... (YAML defaults before load: Kp=%.2f Ki=%.2f Kd=%.2f Target=%.1f)", pi_kp_, pi_ki_, pi_kd_, target_temperature_);
+  ESP_LOGI(TAG, "[CONFIG] Reading from flash... (YAML defaults before load: Kp=%.2f Ki=%.2f Target=%.1f)", pi_kp_, pi_ki_, target_temperature_);
   HeaterConfigData data;
   if (pref_config_.load(&data)) {
     ESP_LOGI(TAG, "[CONFIG] Flash preference loaded, version=%u", data.version);
-    if (data.version >= 3 && data.version <= 5) {
+    if (data.version >= 3 && data.version <= 6) {
       if (std::isnan(data.pi_kp) || std::isnan(data.pi_ki) || std::isnan(data.pi_kd) || std::isnan(data.target_temperature)) {
          ESP_LOGW(TAG, "[CONFIG] Loaded data has NAN, using defaults");
          save_config_data();
@@ -687,8 +687,14 @@ void SunsterHeater::load_config_data() {
       if (data.version >= 5) {
         pi_on_delay_s_ = data.pi_on_delay;
       }
-      ESP_LOGI(TAG, "[CONFIG] After boot (from flash): Kp=%.2f Ki=%.2f Kd=%.2f target=%.1f hyst=%.0f/%.0f inj=%.3f delay_off=%.0fs delay_on=%.0fs tmin=%.1fs",
-               pi_kp_, pi_ki_, pi_kd_, target_temperature_, pi_output_min_off_, pi_output_min_on_, injected_per_pulse_, pi_off_delay_, pi_on_delay_s_, pi_min_on_time_s_);
+      if (data.version >= 6) {
+        if (!std::isnan(data.t_lookahead)) t_lookahead_s_ = data.t_lookahead;
+        if (!std::isnan(data.slope_window)) slope_window_s_ = data.slope_window;
+        if (!std::isnan(data.output_off_threshold)) output_off_threshold_ = data.output_off_threshold;
+        if (!std::isnan(data.output_on_threshold)) output_on_threshold_ = data.output_on_threshold;
+      }
+      ESP_LOGI(TAG, "[CONFIG] After boot: Kp=%.2f Ki=%.2f target=%.1f t_look=%.0f slope_win=%.0f off_thr=%.0f on_thr=%.0f tmin=%.1fs",
+               pi_kp_, pi_ki_, target_temperature_, t_lookahead_s_, slope_window_s_, output_off_threshold_, output_on_threshold_, pi_min_on_time_s_);
     } else {
       ESP_LOGW(TAG, "[CONFIG] Version mismatch (got %u), using YAML defaults", data.version);
       save_config_data();
@@ -697,13 +703,11 @@ void SunsterHeater::load_config_data() {
     ESP_LOGI(TAG, "[CONFIG] No flash data, using YAML defaults");
     save_config_data();
   }
-  ESP_LOGI(TAG, "[CONFIG] Values that will be sent to HA: Kp=%.2f Ki=%.2f Kd=%.2f target=%.1f delay=%.0fs min_off=%.0f min_on=%.0f inj=%.3f",
-           pi_kp_, pi_ki_, pi_kd_, target_temperature_, pi_off_delay_, pi_output_min_off_, pi_output_min_on_, injected_per_pulse_);
 }
 
 void SunsterHeater::save_config_data() {
   HeaterConfigData data;
-  data.version = 5;
+  data.version = 6;
   data.pi_kp = pi_kp_;
   data.pi_ki = pi_ki_;
   data.pi_kd = pi_kd_;
@@ -714,6 +718,10 @@ void SunsterHeater::save_config_data() {
   data.pi_off_delay = pi_off_delay_;
   data.pi_min_on_time_s = pi_min_on_time_s_;
   data.pi_on_delay = pi_on_delay_s_;
+  data.t_lookahead = t_lookahead_s_;
+  data.slope_window = slope_window_s_;
+  data.output_off_threshold = output_off_threshold_;
+  data.output_on_threshold = output_on_threshold_;
   if (pref_config_.save(&data)) {
     ESP_LOGD(TAG, "Config preferences saved");
   } else {
@@ -777,6 +785,26 @@ void SunsterHeater::publish_all_config_entities_() {
     float v = sanitize(pi_min_on_time_s_, 30.0f);
     pi_min_on_time_number_->publish_state(v);
     ESP_LOGD(TAG, "[CONFIG] push PI MinOnTime = %.1f s", v);
+  }
+  if (t_lookahead_number_) {
+    float v = sanitize(t_lookahead_s_, 90.0f);
+    t_lookahead_number_->publish_state(v);
+    ESP_LOGD(TAG, "[CONFIG] push t_lookahead = %.0f s", v);
+  }
+  if (slope_window_number_) {
+    float v = sanitize(slope_window_s_, 45.0f);
+    slope_window_number_->publish_state(v);
+    ESP_LOGD(TAG, "[CONFIG] push slope_window = %.0f s", v);
+  }
+  if (output_off_threshold_number_) {
+    float v = sanitize(output_off_threshold_, -10.0f);
+    output_off_threshold_number_->publish_state(v);
+    ESP_LOGD(TAG, "[CONFIG] push output_off_threshold = %.0f%%", v);
+  }
+  if (output_on_threshold_number_) {
+    float v = sanitize(output_on_threshold_, 10.0f);
+    output_on_threshold_number_->publish_state(v);
+    ESP_LOGD(TAG, "[CONFIG] push output_on_threshold = %.0f%%", v);
   }
   if (control_mode_select_) {
     const char *mode = "Manual";
@@ -1051,117 +1079,78 @@ void SunsterHeater::handle_automatic_mode() {
 
   uint32_t now = millis();
   float dt_s = (last_pi_time_ != 0) ? (now - last_pi_time_) / 1000.0f : 5.0f;
-  if (dt_s <= 0.0f) {
-    dt_s = 5.0f;
-  }
+  if (dt_s <= 0.0f) dt_s = 5.0f;
   last_pi_time_ = now;
 
-  float error = target_temperature_ - external_temperature_;
-  pi_integral_ += pi_ki_ * error * dt_s;
-  pi_integral_ = std::max(-PI_INTEGRAL_MAX, std::min(PI_INTEGRAL_MAX, pi_integral_));
-
-  float derivative = (dt_s > 0) ? (error - last_error_) / dt_s : 0.0f;
-  last_error_ = error;
-
-  float output = pi_kp_ * error + pi_integral_ + pi_kd_ * derivative;
-  output = std::max(0.0f, std::min(100.0f, output));
-
-  // Round to 10% steps (10, 20, 30, ... 100); min 10% when on
-  float output_stepped = (output < 10.0f) ? 0.0f
-                        : static_cast<float>((static_cast<int>(output / 10.0f + 0.5f)) * 10);
-  output_stepped = std::max(0.0f, std::min(100.0f, output_stepped));
-  last_pi_output_ = output_stepped;
-  if (pi_output_sensor_) {
-    pi_output_sensor_->publish_state(output);
+  // Steigung und Prädiktion (immer aktiv, float durchgängig)
+  bool prev_valid = !std::isnan(temp_prev_) && time_prev_ != 0;
+  if (prev_valid && dt_s > 0.0f) {
+    float slope_raw = (external_temperature_ - temp_prev_) / dt_s;
+    float alpha = dt_s / (slope_window_s_ + dt_s);
+    slope_filtered_ = alpha * slope_raw + (1.0f - alpha) * slope_filtered_;
   }
+  temp_prev_ = external_temperature_;
+  time_prev_ = now;
 
-  // Wenn Soll-Temp < Ist-Temp: Heizung nicht starten, PID gibt 0% bis ist < soll
+  float t_pred = external_temperature_ + slope_filtered_ * t_lookahead_s_;
+  float error = target_temperature_ - t_pred;
+
+  // Reiner PI (kein D), Ausgabe ±100%; Anti-Windup: Integral nur wenn nicht am Limit
+  float output_raw = std::max(-100.0f, std::min(100.0f, pi_kp_ * error + pi_integral_));
+  if (output_raw > -100.0f && output_raw < 100.0f) {
+    pi_integral_ += pi_ki_ * error * dt_s;
+    pi_integral_ = std::max(-PI_INTEGRAL_MAX, std::min(PI_INTEGRAL_MAX, pi_integral_));
+  }
+  last_error_ = error;
+  last_pi_output_ = output_raw;
+  if (pi_output_sensor_) pi_output_sensor_->publish_state(output_raw);
+
   bool soll_unter_ist = (target_temperature_ < external_temperature_);
-  
-  ESP_LOGV(TAG, "[PID] soll=%.1f ist=%.1f out=%.1f out_stepped=%.0f enabled=%s soll_unter_ist=%s",
-           target_temperature_, external_temperature_, output, output_stepped, heater_enabled_ ? "ON" : "OFF",
-           soll_unter_ist ? "JA" : "NEIN");
+  ESP_LOGV(TAG, "[PI] soll=%.2f ist=%.2f T_pred=%.2f slope=%.4f err=%.2f out_raw=%.1f off_thr=%.0f on_thr=%.0f",
+           target_temperature_, external_temperature_, t_pred, slope_filtered_, error, output_raw,
+           output_off_threshold_, output_on_threshold_);
 
-  // Heizung läuft nicht (OFF, Preheat, Cooldown): nur PID ausgeben, ggf. starten wenn out >= min_on und soll >= ist
+  // Nicht STABLE_COMBUSTION: nur Ein-Schwelle prüfen (kein Delay)
   if (current_state_ != HeaterState::STABLE_COMBUSTION) {
     time_entered_off_region_ = 0;
-    if (!heater_enabled_ && output_stepped >= pi_output_min_on_ && !soll_unter_ist) {
-      // Einschalt-Verzögerung: PID muss für pi_on_delay_s_ über min_on bleiben
-      if (time_entered_on_region_ == 0) {
-        time_entered_on_region_ = now;
-        ESP_LOGD(TAG, "[PID] Einschalt-Timer start: out_stepped=%.0f >= min_on=%.1f, warte %.0fs", output_stepped, pi_output_min_on_, pi_on_delay_s_);
-      } else {
-        float elapsed_s = (now - time_entered_on_region_) / 1000.0f;
-        if (elapsed_s >= pi_on_delay_s_) {
-          ESP_LOGD(TAG, "[PID] Einschalt-Timer abgelaufen (%.1fs >= %.0fs) -> starte Heizung", elapsed_s, pi_on_delay_s_);
-          turn_on();
-          time_entered_on_region_ = 0;
-        } else {
-          ESP_LOGD(TAG, "[PID] Einschalt-Timer läuft: %.1fs / %.0fs", elapsed_s, pi_on_delay_s_);
-        }
-      }
-    } else {
-      // Output unter min_on oder soll < ist: Timer zurücksetzen
-      if (time_entered_on_region_ != 0) {
-        ESP_LOGD(TAG, "[PID] Einschalt-Timer zurückgesetzt (out=%.0f < min_on=%.1f oder soll < ist)", output_stepped, pi_output_min_on_);
-        time_entered_on_region_ = 0;
-      }
+    if (!heater_enabled_ && output_raw > output_on_threshold_ && !soll_unter_ist) {
+      turn_on();
+      time_entered_on_region_ = 0;
+    } else if (time_entered_on_region_ != 0) {
+      time_entered_on_region_ = 0;
     }
     return;
   }
 
-  if (output < pi_output_min_off_) {
-    // Output is below turn-off threshold (Aus-Zone)
-    ESP_LOGD(TAG, "[HYST] out=%.1f < min_off=%.1f -> Aus-Zone", output, pi_output_min_off_);
+  // STABLE_COMBUSTION: Ein/Aus nur über Schwellen
+  if (output_raw < output_off_threshold_) {
     if (heater_enabled_) {
-      // Min-on time: do not turn off within pi_min_on_time_s_ after entering STABLE_COMBUSTION
       uint32_t stable_elapsed = (time_stable_combustion_entered_ != 0) ? (now - time_stable_combustion_entered_) : 0;
       uint32_t min_on_time_ms = static_cast<uint32_t>(pi_min_on_time_s_ * 1000.0f);
       if (stable_elapsed < min_on_time_ms) {
-        ESP_LOGD(TAG, "[HYST] Min-on: %.1fs / %.1fs – Heizung bleibt min_on=%.0f%%", stable_elapsed / 1000.0f, pi_min_on_time_s_, pi_output_min_on_);
-        set_power_level_percent(pi_output_min_on_);
-        time_entered_off_region_ = 0;
+        set_power_level_percent(10.0f);
         return;
       }
-      if (time_entered_off_region_ == 0) {
-        time_entered_off_region_ = now;
-        ESP_LOGD(TAG, "[HYST] Timer start (%.0fs bis Abschalt). Heizung vorerst auf min_on=%.0f%%", pi_off_delay_, pi_output_min_on_);
-        set_power_level_percent(pi_output_min_on_);
-      } else {
-        float elapsed_s = (now - time_entered_off_region_) / 1000.0f;
-        if (elapsed_s >= pi_off_delay_) {
-          ESP_LOGD(TAG, "[HYST] Timer abgelaufen (%.1fs >= %.0fs) -> Heizung AUS", elapsed_s, pi_off_delay_);
-          turn_off();
-          time_entered_off_region_ = 0;
-        } else {
-          ESP_LOGD(TAG, "[HYST] Timer läuft: %.1fs / %.0fs", elapsed_s, pi_off_delay_);
-        }
-      }
-    } else {
-      time_entered_off_region_ = 0;
+      turn_off();
+    }
+    time_entered_off_region_ = 0;
+    return;
+  }
+
+  time_entered_off_region_ = 0;
+  time_entered_on_region_ = 0;
+
+  if (output_raw > output_on_threshold_) {
+    if (!heater_enabled_ && !soll_unter_ist) turn_on();
+    if (heater_enabled_) {
+      float pct = (output_raw <= 10.0f) ? 10.0f
+                  : static_cast<float>((static_cast<int>(output_raw / 10.0f + 0.5f)) * 10);
+      pct = std::max(10.0f, std::min(100.0f, pct));
+      set_power_level_percent(pct);
     }
   } else {
-    time_entered_off_region_ = 0;
-    time_entered_on_region_ = 0;  // Timer zurücksetzen wenn Heizung läuft
-
-    if (output_stepped >= pi_output_min_on_) {
-      ESP_LOGD(TAG, "[HYST] out_stepped=%.0f >= min_on=%.1f -> Ein-Zone, Leistung=%.0f%%", output_stepped, pi_output_min_on_, output_stepped);
-      // Heizung nur einschalten, wenn Soll-Temp >= Ist-Temp (error >= 0)
-      if (!heater_enabled_ && !soll_unter_ist) {
-        turn_on();
-      } else if (!heater_enabled_ && soll_unter_ist) {
-        ESP_LOGD(TAG, "[HYST] Soll-Temp (%.1f°C) < Ist-Temp (%.1f°C) -> Heizung bleibt AUS, PID aktiv für Hysterese", 
-                 target_temperature_, external_temperature_);
-      }
-      if (heater_enabled_) {
-        set_power_level_percent(output_stepped);
-      }
-    } else {
-      ESP_LOGD(TAG, "[HYST] min_off <= out=%.1f < min_on -> Hysterese-Band, Heizung bleibt bei min_on=%.0f%%", output, pi_output_min_on_);
-      if (heater_enabled_) {
-        set_power_level_percent(pi_output_min_on_);
-      }
-    }
+    // Zwischen off_threshold und on_threshold: Zustand halten, wenn an dann Min-Leistung
+    if (heater_enabled_) set_power_level_percent(10.0f);
   }
 }
 
@@ -1224,10 +1213,13 @@ void SunsterHeater::set_control_mode(ControlMode mode) {
     turn_off();
     antifreeze_active_ = false;
   }
-  // When entering automatic mode, reset PI integral for fresh start
+  // When entering automatic mode, reset PI and prediction state for fresh start
   if (mode == ControlMode::AUTOMATIC) {
     pi_integral_ = 0.0f;
     last_pi_time_ = 0;
+    temp_prev_ = NAN;
+    time_prev_ = 0;
+    slope_filtered_ = 0.0f;
   }
   
   ESP_LOGI(TAG, "Control mode changed from %d to %d", (int)old_mode, (int)mode);

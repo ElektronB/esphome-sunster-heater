@@ -52,9 +52,10 @@ sensor:
     address: 0xd43ce1e3810bed28
     id: raumtemperatur
     name: "Raumtemperatur"
-    update_interval: 3s  # Langsamere Abfrage für bessere Stabilität
+    update_interval: 5s   # Alle 5s für PI-Prädiktion
+    resolution: 12       # 12-bit, float durchgängig in Regler
     filters:
-      - filter_out: nan  # Filtert NaN-Werte heraus
+      - filter_out: nan
 
 sunster_heater:
   id: my_heater
@@ -64,12 +65,16 @@ sunster_heater:
   external_temperature_sensor: raumtemperatur
   target_temperature: 18.0
   # PID-Regler (abgestimmt auf ~0,5°C/min Aufheizung): Stellwert 0–100 %, unter min_off aus, ab min_on ein
-  pi_kp: 10.0
-  pi_ki: 0.05
-  pi_kd: 2.0
-  pi_off_delay: 60.0
+  pi_kp: 20.0
+  pi_ki: 0.15
+  pi_kd: 1.0
+  pi_off_delay: 30.0
   pi_output_min_off: 3.0
-  pi_output_min_on: 15.0
+  pi_output_min_on: 10.0
+  t_lookahead: 90
+  slope_window: 45
+  output_off_threshold: -10
+  output_on_threshold: 10
   default_power_percent: 10
   min_voltage_start: 12.0
   min_voltage_operate: 10.0
@@ -108,7 +113,7 @@ sunster_heater:
     mode: box
     restore_value: true  # Saves value to flash
     optimistic: true
-    initial_value: 180
+    initial_value: 60
     min_value: 0
     max_value: 600
     step: 10
@@ -148,6 +153,42 @@ sunster_heater:
     min_value: 0
     max_value: 300
     step: 5
+  t_lookahead_number:
+    name: "Heizung Vorausschau (s)"
+    mode: box
+    restore_value: true
+    optimistic: true
+    initial_value: 90
+    min_value: 30
+    max_value: 300
+    step: 5
+  slope_window_number:
+    name: "Heizung Steigungsfenster (s)"
+    mode: box
+    restore_value: true
+    optimistic: true
+    initial_value: 45
+    min_value: 10
+    max_value: 120
+    step: 5
+  output_off_threshold_number:
+    name: "Heizung Regler Aus-Schwelle (%)"
+    mode: box
+    restore_value: true
+    optimistic: true
+    initial_value: -10
+    min_value: -100
+    max_value: 0
+    step: 1
+  output_on_threshold_number:
+    name: "Heizung Regler Ein-Schwelle (%)"
+    mode: box
+    restore_value: true
+    optimistic: true
+    initial_value: 10
+    min_value: 0
+    max_value: 100
+    step: 1
 
   injected_per_pulse_number:
     name: "Fuel Injected Per Pulse"

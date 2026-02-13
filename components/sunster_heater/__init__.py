@@ -45,6 +45,10 @@ SunsterTargetTemperatureNumber = sunster_heater_ns.class_("SunsterTargetTemperat
 SunsterPiOutputMinOffNumber = sunster_heater_ns.class_("SunsterPiOutputMinOffNumber", number.Number, cg.Component)
 SunsterPiOutputMinOnNumber = sunster_heater_ns.class_("SunsterPiOutputMinOnNumber", number.Number, cg.Component)
 SunsterPiMinOnTimeNumber = sunster_heater_ns.class_("SunsterPiMinOnTimeNumber", number.Number, cg.Component)
+SunsterTLookaheadNumber = sunster_heater_ns.class_("SunsterTLookaheadNumber", number.Number, cg.Component)
+SunsterSlopeWindowNumber = sunster_heater_ns.class_("SunsterSlopeWindowNumber", number.Number, cg.Component)
+SunsterOutputOffThresholdNumber = sunster_heater_ns.class_("SunsterOutputOffThresholdNumber", number.Number, cg.Component)
+SunsterOutputOnThresholdNumber = sunster_heater_ns.class_("SunsterOutputOnThresholdNumber", number.Number, cg.Component)
 
 # Configuration keys
 CONF_AUTO_SENSORS = "auto_sensors"
@@ -70,6 +74,14 @@ CONF_TARGET_TEMPERATURE_NUMBER = "target_temperature_number"
 CONF_PI_OUTPUT_MIN_OFF_NUMBER = "pi_output_min_off_number"
 CONF_PI_OUTPUT_MIN_ON_NUMBER = "pi_output_min_on_number"
 CONF_PI_MIN_ON_TIME_NUMBER = "pi_min_on_time_number"
+CONF_T_LOOKAHEAD = "t_lookahead"
+CONF_SLOPE_WINDOW = "slope_window"
+CONF_OUTPUT_OFF_THRESHOLD = "output_off_threshold"
+CONF_OUTPUT_ON_THRESHOLD = "output_on_threshold"
+CONF_T_LOOKAHEAD_NUMBER = "t_lookahead_number"
+CONF_SLOPE_WINDOW_NUMBER = "slope_window_number"
+CONF_OUTPUT_OFF_THRESHOLD_NUMBER = "output_off_threshold_number"
+CONF_OUTPUT_ON_THRESHOLD_NUMBER = "output_on_threshold_number"
 
 # Control mode options
 CONTROL_MODE_MANUAL = "manual"
@@ -219,6 +231,24 @@ CONFIG_SCHEMA = cv.All(
             ),
             cv.Optional("pi_output_min_on", default=15.0): cv.float_range(
                 min=5.0, max=50.0
+            ),
+            cv.Optional("pi_on_delay", default=30.0): cv.float_range(
+                min=0.0, max=600.0
+            ),
+            cv.Optional("pi_min_on_time", default=30.0): cv.float_range(
+                min=0.0, max=300.0
+            ),
+            cv.Optional(CONF_T_LOOKAHEAD, default=90.0): cv.float_range(
+                min=30.0, max=300.0
+            ),
+            cv.Optional(CONF_SLOPE_WINDOW, default=45.0): cv.float_range(
+                min=10.0, max=120.0
+            ),
+            cv.Optional(CONF_OUTPUT_OFF_THRESHOLD, default=-10.0): cv.float_range(
+                min=-100.0, max=0.0
+            ),
+            cv.Optional(CONF_OUTPUT_ON_THRESHOLD, default=10.0): cv.float_range(
+                min=0.0, max=100.0
             ),
             cv.Optional("min_voltage_start", default=12.3): cv.float_range(
                 min=10.0, max=15.0
@@ -402,6 +432,50 @@ CONFIG_SCHEMA = cv.All(
                 cv.Optional("step", default=5.0): cv.float_,
                 **NUMBER_EXTRA,
             }),
+            cv.Optional(CONF_T_LOOKAHEAD_NUMBER): number.number_schema(
+                SunsterTLookaheadNumber,
+                unit_of_measurement="s",
+                icon="mdi:clock-fast",
+                entity_category="config",
+            ).extend({
+                cv.Optional("min_value", default=30.0): cv.float_,
+                cv.Optional("max_value", default=300.0): cv.float_,
+                cv.Optional("step", default=5.0): cv.float_,
+                **NUMBER_EXTRA,
+            }),
+            cv.Optional(CONF_SLOPE_WINDOW_NUMBER): number.number_schema(
+                SunsterSlopeWindowNumber,
+                unit_of_measurement="s",
+                icon="mdi:chart-line",
+                entity_category="config",
+            ).extend({
+                cv.Optional("min_value", default=10.0): cv.float_,
+                cv.Optional("max_value", default=120.0): cv.float_,
+                cv.Optional("step", default=5.0): cv.float_,
+                **NUMBER_EXTRA,
+            }),
+            cv.Optional(CONF_OUTPUT_OFF_THRESHOLD_NUMBER): number.number_schema(
+                SunsterOutputOffThresholdNumber,
+                unit_of_measurement=UNIT_PERCENT,
+                icon="mdi:minus-circle-outline",
+                entity_category="config",
+            ).extend({
+                cv.Optional("min_value", default=-100.0): cv.float_,
+                cv.Optional("max_value", default=0.0): cv.float_,
+                cv.Optional("step", default=1.0): cv.float_,
+                **NUMBER_EXTRA,
+            }),
+            cv.Optional(CONF_OUTPUT_ON_THRESHOLD_NUMBER): number.number_schema(
+                SunsterOutputOnThresholdNumber,
+                unit_of_measurement=UNIT_PERCENT,
+                icon="mdi:plus-circle-outline",
+                entity_category="config",
+            ).extend({
+                cv.Optional("min_value", default=0.0): cv.float_,
+                cv.Optional("max_value", default=100.0): cv.float_,
+                cv.Optional("step", default=1.0): cv.float_,
+                **NUMBER_EXTRA,
+            }),
         }
     )
     .extend(cv.COMPONENT_SCHEMA)
@@ -455,6 +529,14 @@ async def to_code(config):
     cg.add(var.set_pi_off_delay(config["pi_off_delay"]))
     cg.add(var.set_pi_output_min_off(config["pi_output_min_off"]))
     cg.add(var.set_pi_output_min_on(config["pi_output_min_on"]))
+    if "pi_on_delay" in config:
+        cg.add(var.set_pi_on_delay(config["pi_on_delay"]))
+    if "pi_min_on_time" in config:
+        cg.add(var.set_pi_min_on_time(config["pi_min_on_time"]))
+    cg.add(var.set_t_lookahead(config[CONF_T_LOOKAHEAD]))
+    cg.add(var.set_slope_window(config[CONF_SLOPE_WINDOW]))
+    cg.add(var.set_output_off_threshold(config[CONF_OUTPUT_OFF_THRESHOLD]))
+    cg.add(var.set_output_on_threshold(config[CONF_OUTPUT_ON_THRESHOLD]))
 
     # Set autotune parameters
     cg.add(var.set_autotune_high_percent(config["autotune_high_percent"]))
@@ -639,3 +721,23 @@ async def to_code(config):
         num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
         cg.add(num.set_sunster_heater(var))
         cg.add(var.set_pi_min_on_time_number(num))
+    if CONF_T_LOOKAHEAD_NUMBER in config:
+        num_config = config[CONF_T_LOOKAHEAD_NUMBER]
+        num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
+        cg.add(num.set_sunster_heater(var))
+        cg.add(var.set_t_lookahead_number(num))
+    if CONF_SLOPE_WINDOW_NUMBER in config:
+        num_config = config[CONF_SLOPE_WINDOW_NUMBER]
+        num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
+        cg.add(num.set_sunster_heater(var))
+        cg.add(var.set_slope_window_number(num))
+    if CONF_OUTPUT_OFF_THRESHOLD_NUMBER in config:
+        num_config = config[CONF_OUTPUT_OFF_THRESHOLD_NUMBER]
+        num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
+        cg.add(num.set_sunster_heater(var))
+        cg.add(var.set_output_off_threshold_number(num))
+    if CONF_OUTPUT_ON_THRESHOLD_NUMBER in config:
+        num_config = config[CONF_OUTPUT_ON_THRESHOLD_NUMBER]
+        num = await number.new_number(num_config, min_value=num_config["min_value"], max_value=num_config["max_value"], step=num_config["step"])
+        cg.add(num.set_sunster_heater(var))
+        cg.add(var.set_output_on_threshold_number(num))
