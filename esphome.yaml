@@ -100,7 +100,7 @@ sunster_heater:
     initial_value: 0.1
   target_temperature_number:
     name: "Heater Target Temperature"
-    mode: slider
+    mode: box   
     restore_value: true  # Saves value to flash
     optimistic: true
     initial_value: 21
@@ -162,3 +162,10 @@ sunster_heater:
 
   reset_total_consumption_button:
     name: "Reset Total Fuel Consumption"
+
+climate:
+  - platform: sunster_heater
+    sunster_heater_id: my_heater
+    name: "Van Heater"
+    min_temperature: 5
+    max_temperature: 35

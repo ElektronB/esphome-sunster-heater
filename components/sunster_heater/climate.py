@@ -7,7 +7,7 @@ from . import sunster_heater_ns, SunsterHeater
 AUTO_LOAD = ["sunster_heater"]
 DEPENDENCIES = ["climate"]
 
-SunsterClimate = sunster_heater_ns.class_("SunsterClimate", climate.Climate, cg.Component)
+SunsterClimate = sunster_heater_ns.class_("SunsterClimate", climate.Climate, cg.PollingComponent)
 
 CONF_SUNSTER_HEATER_ID = "sunster_heater_id"
 CONF_MIN_TEMPERATURE = "min_temperature"
@@ -20,7 +20,7 @@ CONFIG_SCHEMA = climate.CLIMATE_SCHEMA.extend(
         cv.Optional(CONF_MIN_TEMPERATURE, default=5.0): cv.float_range(min=0, max=30),
         cv.Optional(CONF_MAX_TEMPERATURE, default=35.0): cv.float_range(min=10, max=50),
     }
-).extend(cv.COMPONENT_SCHEMA)
+).extend(cv.polling_component_schema("1s"))
 
 
 async def to_code(config):
