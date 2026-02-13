@@ -13,9 +13,8 @@ CONF_SUNSTER_HEATER_ID = "sunster_heater_id"
 CONF_MIN_TEMPERATURE = "min_temperature"
 CONF_MAX_TEMPERATURE = "max_temperature"
 
-CONFIG_SCHEMA = climate.CLIMATE_SCHEMA.extend(
+CONFIG_SCHEMA = climate.climate_schema(SunsterClimate).extend(
     {
-        cv.GenerateID(): cv.declare_id(SunsterClimate),
         cv.Required(CONF_SUNSTER_HEATER_ID): cv.use_id(SunsterHeater),
         cv.Optional(CONF_MIN_TEMPERATURE, default=5.0): cv.float_range(min=0, max=30),
         cv.Optional(CONF_MAX_TEMPERATURE, default=35.0): cv.float_range(min=10, max=50),
