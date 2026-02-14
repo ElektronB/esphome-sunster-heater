@@ -408,8 +408,13 @@ void SunsterHeater::process_heater_frame(const std::vector<uint8_t> &frame) {
       if (new_state == HeaterState::STABLE_COMBUSTION) {
         time_stable_combustion_entered_ = millis();
         last_pi_time_ = 0;  // so first PI step uses default dt_s
+        slope_warmup_done_ = false;  // reset slope and wait slope_window before PI
+        slope_filtered_ = 0.0f;
+        temp_prev_ = external_temperature_;
+        time_prev_ = millis();
       } else {
         time_stable_combustion_entered_ = 0;
+        slope_warmup_done_ = false;
       }
       current_state_ = new_state;
       ESP_LOGD(TAG, "Heater state changed to: %s", state_to_string(current_state_));
@@ -1065,6 +1070,43 @@ void SunsterHeater::handle_automatic_mode() {
   }
 
   uint32_t now = millis();
+
+  // STABLE_COMBUSTION: slope warmup – reset slope at transition, hold 10% for slope_window, then reset integrator
+  if (current_state_ == HeaterState::STABLE_COMBUSTION && time_stable_combustion_entered_ != 0) {
+    uint32_t stable_elapsed_ms = now - time_stable_combustion_entered_;
+    uint32_t slope_warmup_ms = static_cast<uint32_t>(slope_window_s_ * 1000.0f);
+
+    if (stable_elapsed_ms < slope_warmup_ms) {
+      // Warmup: hold 10%, update slope only (no PI output)
+      float dt_s = (last_pi_time_ != 0) ? (now - last_pi_time_) / 1000.0f : 5.0f;
+      if (dt_s <= 0.0f) dt_s = 5.0f;
+      last_pi_time_ = now;
+      bool prev_valid = !std::isnan(temp_prev_) && time_prev_ != 0;
+      if (prev_valid && dt_s > 0.0f) {
+        float slope_raw = (external_temperature_ - temp_prev_) / dt_s;
+        float alpha = dt_s / (slope_window_s_ + dt_s);
+        slope_filtered_ = alpha * slope_raw + (1.0f - alpha) * slope_filtered_;
+      }
+      temp_prev_ = external_temperature_;
+      time_prev_ = now;
+      if (heater_enabled_) set_power_level_percent(10.0f);
+      last_pi_output_ = 10.0f;
+      if (pi_output_sensor_) pi_output_sensor_->publish_state(10.0f);
+      if (predicted_temperature_sensor_) predicted_temperature_sensor_->publish_state(external_temperature_ + slope_filtered_ * t_lookahead_s_);
+      if (slope_sensor_) slope_sensor_->publish_state(slope_filtered_);
+      time_entered_off_region_ = 0;
+      ESP_LOGD(TAG, "[PI] Slope warmup %.0fs/%.0fs measured=%.2f slope=%.4f (holding 10%%)",
+               stable_elapsed_ms / 1000.0f, slope_window_s_, external_temperature_, slope_filtered_);
+      return;
+    }
+
+    if (!slope_warmup_done_) {
+      slope_warmup_done_ = true;
+      pi_integral_ = 0.0f;
+      ESP_LOGD(TAG, "[PI] Slope warmup complete, integrator reset, slope=%.4f", slope_filtered_);
+    }
+  }
+
   float dt_s = (last_pi_time_ != 0) ? (now - last_pi_time_) / 1000.0f : 5.0f;
   if (dt_s <= 0.0f) dt_s = 5.0f;
   last_pi_time_ = now;

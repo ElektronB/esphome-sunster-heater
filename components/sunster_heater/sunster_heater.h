@@ -293,6 +293,7 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   uint32_t time_entered_off_region_{0};
   uint32_t time_entered_on_region_{0};
   uint32_t time_stable_combustion_entered_{0};
+  bool slope_warmup_done_{false};  // After STABLE_COMBUSTION: wait slope_window before using PI
   uint32_t time_external_temp_lost_{0};
   static constexpr float PI_INTEGRAL_MAX = 100.0f;
   float pi_min_on_time_s_{30.0f};
