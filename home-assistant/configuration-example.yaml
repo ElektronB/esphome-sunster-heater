@@ -1,0 +1,12 @@
+# Beispiel: Einbindung in configuration.yaml
+# Passe die Pfade an, wenn der home-assistant-Ordner woanders liegt.
+#
+# template:
+#   - !include home-assistant/template-sensor.yaml
+#
+# input_number: !include home-assistant/input-number.yaml
+#
+# automation: !include home-assistant/automation.yaml
+# # Falls du bereits andere Automations hast, nutze z.B.:
+# # automation: !include_dir_merge_list automations/
+# # und lege automation.yaml (mit Liste) in den automations/ Ordner.

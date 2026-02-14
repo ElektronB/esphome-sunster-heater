@@ -3,12 +3,13 @@
 # Im Manual- oder Lüften-Modus: Leistung 10–100%
 #
 # Anleitung:
-# 1. Diese Inhalte in deine Home-Assistant-Konfiguration übernehmen
-# 2. CLIMATE_ENTITY anpassen (z.B. climate.van_heater – in Einstellungen prüfen)
-# 3. Optional: sensor und input_number in configuration.yaml
-# 4. Die Karten-Konfiguration ins Dashboard einfügen
+# 1. Template-Sensor (template-sensor.yaml) in configuration.yaml unter template: einbinden
+# 2. Input Number (input-number.yaml) in configuration.yaml unter input_number: einbinden
+# 3. Automations (automation.yaml) in configuration.yaml unter automation: einbinden (oder als package)
+# 4. Beide Karten ins Dashboard einfügen
+# 5. climate.van_heater ggf. durch deine Entity-ID ersetzen
 
-# ========== 1. Template-Sensor (in configuration.yaml unter template:) ==========
+# ========== 1. Template-Sensor (siehe template-sensor.yaml) ==========
 # Dieser Sensor bestimmt, ob Temperatur- oder Leistungs-UI angezeigt wird.
 #
 # template:
@@ -27,20 +28,7 @@
 #             temperature
 #           {% endif %}
 
-# ========== 2. Input Number für Leistungs-Slider (optional, in configuration.yaml) ==========
-# Ermöglicht einen Slider statt Buttons für die Leistung.
-#
-# input_number:
-#   van_heater_power:
-#     name: "Van Heater Leistung"
-#     min: 10
-#     max: 100
-#     step: 10
-#     unit_of_measurement: "%"
-#     icon: mdi:percent
-#     mode: slider
-
-# ========== 3. Automations für Input-Number-Sync (wenn input_number verwendet) ==========
+# ========== 3. Automations (siehe automation.yaml) ==========
 # automation:
 #   - id: van_heater_power_to_climate
 #     trigger:
@@ -85,90 +73,17 @@ card:
   entity: climate.van_heater
 
 ---
-# Karte B: Leistungs-Steuerung (bei Manual oder Lüften) – 10 Buttons
-# Keine weiteren Helper nötig.
+# Karte B: Leistungs-Steuerung (bei Manual oder Lüften) – Fader/Slider
+# Benötigt input_number.van_heater_power und Automations (siehe Ordner).
 type: conditional
 conditions:
   - condition: state
     entity: sensor.van_heater_ui_mode
     state: power
 card:
-  type: vertical
-  cards:
-    - type: entities
-      entities:
-        - entity: climate.van_heater
-    - type: grid
-      columns: 5
-      square: false
-      cards:
-        - type: button
-          name: "10%"
-          tap_action:
-            action: call-service
-            service: climate.set_fan_mode
-            target: { entity_id: climate.van_heater }
-            data: { fan_mode: "10%" }
-        - type: button
-          name: "20%"
-          tap_action:
-            action: call-service
-            service: climate.set_fan_mode
-            target: { entity_id: climate.van_heater }
-            data: { fan_mode: "20%" }
-        - type: button
-          name: "30%"
-          tap_action:
-            action: call-service
-            service: climate.set_fan_mode
-            target: { entity_id: climate.van_heater }
-            data: { fan_mode: "30%" }
-        - type: button
-          name: "40%"
-          tap_action:
-            action: call-service
-            service: climate.set_fan_mode
-            target: { entity_id: climate.van_heater }
-            data: { fan_mode: "40%" }
-        - type: button
-          name: "50%"
-          tap_action:
-            action: call-service
-            service: climate.set_fan_mode
-            target: { entity_id: climate.van_heater }
-            data: { fan_mode: "50%" }
-        - type: button
-          name: "60%"
-          tap_action:
-            action: call-service
-            service: climate.set_fan_mode
-            target: { entity_id: climate.van_heater }
-            data: { fan_mode: "60%" }
-        - type: button
-          name: "70%"
-          tap_action:
-            action: call-service
-            service: climate.set_fan_mode
-            target: { entity_id: climate.van_heater }
-            data: { fan_mode: "70%" }
-        - type: button
-          name: "80%"
-          tap_action:
-            action: call-service
-            service: climate.set_fan_mode
-            target: { entity_id: climate.van_heater }
-            data: { fan_mode: "80%" }
-        - type: button
-          name: "90%"
-          tap_action:
-            action: call-service
-            service: climate.set_fan_mode
-            target: { entity_id: climate.van_heater }
-            data: { fan_mode: "90%" }
-        - type: button
-          name: "100%"
-          tap_action:
-            action: call-service
-            service: climate.set_fan_mode
-            target: { entity_id: climate.van_heater }
-            data: { fan_mode: "100%" }
+  type: entities
+  entities:
+    - entity: climate.van_heater
+      secondary_info: last-changed
+    - entity: input_number.van_heater_power
+      name: Leistung

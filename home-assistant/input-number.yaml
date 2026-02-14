@@ -1,0 +1,12 @@
+# Input Number für Leistungs-Fader
+# In configuration.yaml unter "input_number:" einbinden.
+# Ersetze "van_heater" im Namen, wenn deine Climate-Entity anders heißt.
+
+van_heater_power:
+  name: "Van Heater Leistung"
+  min: 10
+  max: 100
+  step: 10
+  unit_of_measurement: "%"
+  icon: mdi:percent
+  mode: slider
