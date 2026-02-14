@@ -536,13 +536,16 @@ sunster_heater:
 ## Home Assistant Integration
 
 ### Climate Entity
-Die Climate-Plattform erstellt eine native Home-Assistant-Thermostat-Entity mit:
-- Aktueller Raumtemperatur (vom externen Sensor)
-- Solltemperatur-Steuerung
-- Heat/Off-Modus
-- Heizstatus (Heating/Idle/Off)
+Die Climate-Plattform erstellt eine native Home-Assistant-Thermostat-Entity mit vollständiger Steuerung:
+- **Mode**: Aus (OFF) | Heizbetrieb (HEAT) | Lüften (FAN_ONLY, noch zu implementieren)
+- **Solltemperatur**: 5–35°C
+- **Preset**: Manual | Automatic | Antifreeze (Betriebsart)
+- **Fan Mode (Leistung)**: 10% – 100% in 10 Stufen
+- **Heizstatus**: Heating/Idle/Off
 
-**Thermostat-Karte im Dashboard:** Für die klassische Thermostat-UI eine Karte hinzufügen:
+**Auto Start/Stop Switch** (optional): Standard ON. Bei OFF blockiert die Heizung das vollständige Ausschalten im Automatic-Modus – sie bleibt bei 10% Minimalleistung und geht nicht aus.
+
+**Thermostat-Karte im Dashboard:**
 ```yaml
 type: thermostat
 entity: climate.van_heater  # Entity-ID ggf. in Einstellungen → Geräte prüfen

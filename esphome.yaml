@@ -77,13 +77,8 @@ sunster_heater:
   polling_interval: 5s
   injected_per_pulse: 0.022
 
-  power_switch:
-    name: "Heater On-Off"
-  power_level_number:
-    name: "Heater Power"
-    mode: slider
-  control_mode_select:
-    name: "Heater Mode"
+  auto_stop_switch:
+    name: "Auto Start/Stop"
 
   # Automatic mode: PI controller, thresholds, prediction (UI configurable)
   pi_kp_number:

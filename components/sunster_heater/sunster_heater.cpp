@@ -1127,6 +1127,10 @@ void SunsterHeater::handle_automatic_mode() {
         set_power_level_percent(10.0f);
         return;
       }
+      if (!allow_auto_stop_) {
+        set_power_level_percent(10.0f);
+        return;
+      }
       turn_off();
     }
     time_entered_off_region_ = 0;

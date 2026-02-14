@@ -175,9 +175,14 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   void reset_total_consumption();
 
   // Control mode management
+  ControlMode get_control_mode() const { return control_mode_; }
   bool is_automatic_mode() const { return control_mode_ == ControlMode::AUTOMATIC; }
   bool is_manual_mode() const { return control_mode_ == ControlMode::MANUAL; }
   bool is_antifreeze_mode() const { return control_mode_ == ControlMode::ANTIFREEZE; }
+
+  // Auto start/stop: when false, PI never calls turn_off(), holds at 10% instead
+  void set_allow_auto_stop(bool allow) { allow_auto_stop_ = allow; }
+  bool get_allow_auto_stop() const { return allow_auto_stop_; }
   float get_external_temperature() const { return external_temperature_; }
   bool has_external_sensor() const {
     return external_temperature_sensor_ != nullptr &&
@@ -255,6 +260,7 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   // Control state
   bool heater_enabled_{false};
   bool automatic_master_enabled_{true};  // Power switch: when false, automatic mode won't turn on
+  bool allow_auto_stop_{true};           // When false, PI holds at 10% instead of turn_off()
   uint8_t power_level_{8};  // 1-10 scale, default 80%
   float target_temperature_{20.0};
   HeaterState current_state_{HeaterState::OFF};
@@ -477,6 +483,34 @@ class SunsterHeaterPowerSwitch : public switch_::Switch, public Component {
   bool pre_sync_published_{false};
   bool last_published_state_{false};
   uint32_t last_sync_publish_{0};
+};
+
+// Switch: allow auto stop in Automatic mode (default ON). When OFF, heater stays at 10% instead of turning off.
+class SunsterAutoStopSwitch : public switch_::Switch, public Component {
+ public:
+  void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
+  void dump_config() override {
+    LOG_SWITCH("", "Sunster Heater Auto Stop", this);
+  }
+
+ protected:
+  void loop() override {
+    Component::loop();
+    if (!heater_) return;
+    if (!initial_published_) {
+      this->publish_state(heater_->get_allow_auto_stop());
+      initial_published_ = true;
+    }
+  }
+  void write_state(bool state) override {
+    if (heater_) {
+      heater_->set_allow_auto_stop(state);
+      this->publish_state(state);
+    }
+  }
+
+  SunsterHeater *heater_{nullptr};
+  bool initial_published_{false};
 };
 
 // Number component for power level control (Manual mode only)

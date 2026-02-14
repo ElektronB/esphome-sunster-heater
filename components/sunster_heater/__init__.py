@@ -34,6 +34,7 @@ SunsterInjectedPerPulseNumber = sunster_heater_ns.class_("SunsterInjectedPerPuls
 SunsterResetTotalConsumptionButton = sunster_heater_ns.class_("SunsterResetTotalConsumptionButton", button.Button, cg.Component)
 SunsterControlModeSelect = sunster_heater_ns.class_("SunsterControlModeSelect", select.Select, cg.Component)
 SunsterHeaterPowerSwitch = sunster_heater_ns.class_("SunsterHeaterPowerSwitch", switch.Switch, cg.Component)
+SunsterAutoStopSwitch = sunster_heater_ns.class_("SunsterAutoStopSwitch", switch.Switch, cg.Component)
 SunsterHeaterPowerLevelNumber = sunster_heater_ns.class_("SunsterHeaterPowerLevelNumber", number.Number, cg.Component)
 SunsterPiKpNumber = sunster_heater_ns.class_("SunsterPiKpNumber", number.Number, cg.Component)
 SunsterPiKiNumber = sunster_heater_ns.class_("SunsterPiKiNumber", number.Number, cg.Component)
@@ -57,6 +58,7 @@ CONF_PASSIVE_SNIFF = "passive_sniff"
 CONF_POLLING_INTERVAL = "polling_interval"
 CONF_RESET_TOTAL_CONSUMPTION_BUTTON = "reset_total_consumption_button"
 CONF_POWER_SWITCH = "power_switch"
+CONF_AUTO_STOP_SWITCH = "auto_stop_switch"
 CONF_POWER_LEVEL_NUMBER = "power_level_number"
 CONF_PI_KP_NUMBER = "pi_kp_number"
 CONF_PI_KI_NUMBER = "pi_ki_number"
@@ -297,6 +299,10 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_POWER_SWITCH): switch.switch_schema(
                 SunsterHeaterPowerSwitch,
                 icon="mdi:fire",
+            ),
+            cv.Optional(CONF_AUTO_STOP_SWITCH): switch.switch_schema(
+                SunsterAutoStopSwitch,
+                icon="mdi:power-sleep",
             ),
             cv.Optional(CONF_POWER_LEVEL_NUMBER): number.number_schema(
                 SunsterHeaterPowerLevelNumber,
@@ -576,6 +582,11 @@ async def to_code(config):
     # Switch component for heater power
     if CONF_POWER_SWITCH in config:
         sw = await switch.new_switch(config[CONF_POWER_SWITCH])
+        cg.add(sw.set_sunster_heater(var))
+
+    # Switch: allow auto stop (default ON). When OFF, heater stays at 10% in Automatic instead of turning off
+    if CONF_AUTO_STOP_SWITCH in config:
+        sw = await switch.new_switch(config[CONF_AUTO_STOP_SWITCH])
         cg.add(sw.set_sunster_heater(var))
 
     # Number component for power level
