@@ -1254,6 +1254,7 @@ bool SunsterHeater::turn_on() {
   }
   
   heater_enabled_ = true;
+  last_start_request_time_ = millis();  // Grace period starts now – avoids sync-to-OFF before start frame is sent
   // Set to default power level on turn on
   power_level_ = static_cast<uint8_t>(default_power_percent_ / 10.0f);
   ESP_LOGI(TAG, "Heater turned ON at %.0f%% power", default_power_percent_);

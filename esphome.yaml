@@ -154,7 +154,8 @@ sunster_heater:
     name: "Reset Total Fuel Consumption"
 
 # Climate-Entity für Thermostat-Karte in Home Assistant
-# Dashboard: type: thermostat, entity: climate.van_heater
+# Entity-ID typisch: climate.van_heater (aus device + name)
+# Modusabhängige Karte: home-assistant/sunster-climate-dashboard.yaml
 climate:
   - platform: sunster_heater
     sunster_heater_id: my_heater
