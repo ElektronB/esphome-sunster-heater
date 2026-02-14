@@ -1,0 +1,18 @@
+# Template-Sensor für modusabhängige UI
+# In configuration.yaml unter "template:" einbinden.
+# Ersetze climate.van_heater durch deine Climate-Entity-ID.
+
+- sensor:
+    - name: "Van Heater UI Mode"
+      unique_id: sunster_van_heater_ui_mode
+      state: >
+        {% set e = 'climate.van_heater' %}
+        {% set preset = state_attr(e, 'preset_mode') %}
+        {% set mode = states(e) %}
+        {% if preset == 'Automatic' %}
+          temperature
+        {% elif preset == 'Manual' or mode == 'fan_only' %}
+          power
+        {% else %}
+          temperature
+        {% endif %}

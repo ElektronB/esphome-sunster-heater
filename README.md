@@ -551,6 +551,15 @@ type: thermostat
 entity: climate.van_heater  # Entity-ID ggf. in Einstellungen → Geräte prüfen
 ```
 
+**Modusabhängige Karte (Automatic → Temperatur, Manual/Lüften → Leistung 10–100%):**
+
+Im Automatic-Modus wird die Thermostat-Karte angezeigt, in Manual- oder Lüften-Modus ein Button-Grid für die Leistungsstufen. Dafür:
+
+1. **Template-Sensor** in `configuration.yaml` unter `template:` einbinden – siehe [home-assistant/template-sensor.yaml](home-assistant/template-sensor.yaml)
+2. **Zwei Conditional-Karten** ins Dashboard einfügen – siehe [home-assistant/sunster-climate-dashboard.yaml](home-assistant/sunster-climate-dashboard.yaml)
+
+Ersetze `climate.van_heater` bzw. `sensor.van_heater_ui_mode` durch deine Entity-IDs.
+
 ### Sensor Entities
 - All sensors appear as individual entities with:
   - Proper device classes for correct icons
