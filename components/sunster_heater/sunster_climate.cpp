@@ -74,7 +74,7 @@ void SunsterClimate::control(const climate::ClimateCall &call) {
   }
 
   // Custom preset "Power" → switch to manual power control
-  if (call.get_custom_preset().has_value() && *call.get_custom_preset() == "Power") {
+  if (call.has_custom_preset() && call.get_custom_preset() == "Power") {
     heater_->set_control_mode(ControlMode::MANUAL);
   }
 
@@ -118,8 +118,7 @@ void SunsterClimate::update() {
   switch (cmode) {
     case ControlMode::AUTOMATIC:
       this->target_temperature = heater_->get_target_temperature();
-      this->preset = climate::CLIMATE_PRESET_NONE;
-      this->custom_preset.reset();
+      this->set_preset_(climate::CLIMATE_PRESET_NONE);
       if (heater_->is_automatic_master_enabled()) {
         this->mode = climate::CLIMATE_MODE_HEAT;
         this->action = is_heating ? climate::CLIMATE_ACTION_HEATING
@@ -133,8 +132,7 @@ void SunsterClimate::update() {
     case ControlMode::MANUAL:
       this->target_temperature = NAN;
       this->set_custom_fan_mode_(power_to_fan_mode(heater_->get_power_level_percent()));
-      this->custom_preset = std::string("Power");
-      this->preset.reset();
+      this->set_custom_preset_("Power");
       if (heater_on) {
         this->mode = climate::CLIMATE_MODE_HEAT;
         this->action = is_heating ? climate::CLIMATE_ACTION_HEATING
@@ -147,8 +145,7 @@ void SunsterClimate::update() {
 
     case ControlMode::ANTIFREEZE:
       this->target_temperature = heater_->get_target_temperature();
-      this->preset = climate::CLIMATE_PRESET_NONE;
-      this->custom_preset.reset();
+      this->set_preset_(climate::CLIMATE_PRESET_NONE);
       this->mode = climate::CLIMATE_MODE_HEAT;
       this->action = is_heating ? climate::CLIMATE_ACTION_HEATING
                                 : climate::CLIMATE_ACTION_IDLE;
@@ -157,8 +154,7 @@ void SunsterClimate::update() {
     case ControlMode::FAN_ONLY:
       this->target_temperature = NAN;
       this->set_custom_fan_mode_(power_to_fan_mode(heater_->get_power_level_percent()));
-      this->preset = climate::CLIMATE_PRESET_NONE;
-      this->custom_preset.reset();
+      this->set_preset_(climate::CLIMATE_PRESET_NONE);
       this->mode = climate::CLIMATE_MODE_FAN_ONLY;
       this->action = climate::CLIMATE_ACTION_FAN;
       break;
