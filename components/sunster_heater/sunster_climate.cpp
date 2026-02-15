@@ -78,14 +78,19 @@ void SunsterClimate::control(const climate::ClimateCall &call) {
     }
   }
 
-  if (call.get_target_temperature().has_value()) {
+  // Target temperature only in AUTO mode
+  if (call.get_target_temperature().has_value() && heater_->get_control_mode() == ControlMode::AUTOMATIC) {
     float target = *call.get_target_temperature();
     heater_->set_target_temperature(target);
   }
 
+  // Power level only in HEAT / FAN_ONLY mode
   if (call.has_custom_fan_mode()) {
-    float pct = parse_power_percent(call.get_custom_fan_mode().c_str());
-    heater_->set_power_level_percent(pct);
+    ControlMode cm = heater_->get_control_mode();
+    if (cm == ControlMode::MANUAL || cm == ControlMode::FAN_ONLY) {
+      float pct = parse_power_percent(call.get_custom_fan_mode().c_str());
+      heater_->set_power_level_percent(pct);
+    }
   }
 
   this->update();
@@ -100,12 +105,17 @@ void SunsterClimate::update() {
     this->current_temperature = current;
   }
 
-  // Target temperature and fan mode sync
-  this->target_temperature = heater_->get_target_temperature();
-  this->set_custom_fan_mode_(power_to_fan_mode(heater_->get_power_level_percent()));
-
   // Map ControlMode + heater state to HVAC mode and action
   ControlMode cmode = heater_->get_control_mode();
+
+  // AUTO: publish target temperature, hide fan mode
+  // HEAT/FAN_ONLY: publish fan mode (power level), hide target temperature
+  if (cmode == ControlMode::AUTOMATIC) {
+    this->target_temperature = heater_->get_target_temperature();
+  } else {
+    this->target_temperature = NAN;
+    this->set_custom_fan_mode_(power_to_fan_mode(heater_->get_power_level_percent()));
+  }
   bool heater_on = heater_->get_heater_enabled();
   bool is_heating = heater_->is_heating();
 
