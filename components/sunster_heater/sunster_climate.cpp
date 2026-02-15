@@ -43,7 +43,6 @@ climate::ClimateTraits SunsterClimate::traits() {
   traits.add_feature_flags(climate::CLIMATE_SUPPORTS_CURRENT_TEMPERATURE |
                            climate::CLIMATE_SUPPORTS_ACTION);
   traits.set_supported_custom_fan_modes({"10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%"});
-  traits.set_supported_custom_presets({"Defreeze"});
   traits.set_visual_min_temperature(min_temperature_);
   traits.set_visual_max_temperature(max_temperature_);
   traits.set_visual_temperature_step(0.5f);
@@ -87,14 +86,6 @@ void SunsterClimate::control(const climate::ClimateCall &call) {
   if (call.has_custom_fan_mode()) {
     float pct = parse_power_percent(call.get_custom_fan_mode().c_str());
     heater_->set_power_level_percent(pct);
-  }
-
-  if (call.has_custom_preset()) {
-    auto preset = call.get_custom_preset();
-    if (preset == "Defreeze") {
-      heater_->set_control_mode(ControlMode::ANTIFREEZE);
-      // Don't call turn_on() -- antifreeze handler manages on/off based on temperature thresholds
-    }
   }
 
   this->update();
@@ -146,9 +137,9 @@ void SunsterClimate::update() {
       break;
 
     case ControlMode::ANTIFREEZE:
-      // Antifreeze handler manages on/off autonomously -- show HEAT + "Defreeze" preset
+      // Antifreeze still exists as ControlMode but is no longer selectable via climate UI
+      this->preset = climate::CLIMATE_PRESET_NONE;
       this->mode = climate::CLIMATE_MODE_HEAT;
-      this->set_custom_preset_("Defreeze");
       this->action = is_heating ? climate::CLIMATE_ACTION_HEATING
                                 : climate::CLIMATE_ACTION_IDLE;
       break;
