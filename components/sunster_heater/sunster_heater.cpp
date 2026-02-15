@@ -334,20 +334,20 @@ void SunsterHeater::send_controller_frame() {
       frame.push_back(0x02);              // 2: Status request
     }
   } else {
-    if (current_state_ == HeaterState::OFF) {
+    if (current_state_ == HeaterState::OFF || current_state_ == HeaterState::STOPPING_COOLING) {
       frame.push_back(0x06);              // 2: Start command
     } else {
       frame.push_back(0x02);              // 2: Status request
     }
   }
-  
+
   frame.push_back(CONTROLLER_FRAME_LENGTH); // 3: Frame length
   frame.push_back(0x00);                    // 4: Unknown
   frame.push_back(0x00);                    // 5: Unknown
   frame.push_back(0x00);                    // 6: Unknown
   frame.push_back(0x00);                    // 7: Unknown
   frame.push_back(power_level_);            // 8: Power level (1-10)
-  
+
   // Set requested state
   if (!heater_enabled_) {
     if (current_state_ != HeaterState::OFF && current_state_ != HeaterState::STOPPING_COOLING) {
@@ -356,7 +356,7 @@ void SunsterHeater::send_controller_frame() {
       frame.push_back(0x02);              // 9: Off
     }
   } else {
-    if (current_state_ == HeaterState::OFF) {
+    if (current_state_ == HeaterState::OFF || current_state_ == HeaterState::STOPPING_COOLING) {
       frame.push_back(0x06);              // 9: Start
     } else {
       frame.push_back(0x08);              // 9: Running
@@ -1053,8 +1053,8 @@ void SunsterHeater::handle_automatic_mode() {
     return;
   }
 
-  // Cooldown: output 0%, no integral windup
-  if (current_state_ == HeaterState::STOPPING_COOLING) {
+  // Cooldown: output 0%, no integral windup (only when not actively trying to start)
+  if (current_state_ == HeaterState::STOPPING_COOLING && !heater_enabled_) {
     last_pi_output_ = 0.0f;
     if (pi_output_sensor_) pi_output_sensor_->publish_state(0.0f);
     time_entered_off_region_ = 0;
