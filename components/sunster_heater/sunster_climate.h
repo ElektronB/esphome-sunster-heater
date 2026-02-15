@@ -25,8 +25,8 @@ class SunsterClimate : public climate::Climate, public PollingComponent {
   void control(const climate::ClimateCall &call) override;
 
   SunsterHeater *heater_{nullptr};
-  float min_temperature_{5.0f};
-  float max_temperature_{35.0f};
+  float min_temperature_{10.0f};
+  float max_temperature_{100.0f};
 };
 
 }  // namespace sunster_heater
