@@ -258,6 +258,7 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   bool heater_state_synced_once_{false};  // After first heater frame, sync heater_enabled_ from state so switch can init
   uint32_t last_start_request_time_{0};   // Don't sync heater_enabled_ to false when OFF during start grace (heater needs ~60s)
   static constexpr uint32_t START_GRACE_MS = 120000;  // 2 min grace after start before accepting OFF from heater
+  static constexpr uint16_t STOPPING_COOLING_TIMEOUT_S = 300;  // 5 min: override stale STOPPING_COOLING → OFF
 
   // Control state
   bool heater_enabled_{false};

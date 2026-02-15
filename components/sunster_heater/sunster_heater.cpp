@@ -328,13 +328,13 @@ void SunsterHeater::send_controller_frame() {
   
   // Determine command based on current state and desired state
   if (!heater_enabled_) {
-    if (current_state_ != HeaterState::OFF && current_state_ != HeaterState::STOPPING_COOLING) {
+    if (current_state_ != HeaterState::OFF) {
       frame.push_back(0x06);              // 2: Stop command
     } else {
       frame.push_back(0x02);              // 2: Status request
     }
   } else {
-    if (current_state_ == HeaterState::OFF || current_state_ == HeaterState::STOPPING_COOLING) {
+    if (current_state_ == HeaterState::OFF) {
       frame.push_back(0x06);              // 2: Start command
     } else {
       frame.push_back(0x02);              // 2: Status request
@@ -350,13 +350,13 @@ void SunsterHeater::send_controller_frame() {
 
   // Set requested state
   if (!heater_enabled_) {
-    if (current_state_ != HeaterState::OFF && current_state_ != HeaterState::STOPPING_COOLING) {
+    if (current_state_ != HeaterState::OFF) {
       frame.push_back(0x05);              // 9: Set off
     } else {
       frame.push_back(0x02);              // 9: Off
     }
   } else {
-    if (current_state_ == HeaterState::OFF || current_state_ == HeaterState::STOPPING_COOLING) {
+    if (current_state_ == HeaterState::OFF) {
       frame.push_back(0x06);              // 9: Start
     } else {
       frame.push_back(0x08);              // 9: Running
@@ -403,7 +403,19 @@ void SunsterHeater::process_heater_frame(const std::vector<uint8_t> &frame) {
     // Parse heater state (byte 5)
     uint8_t state_raw = frame[5];
     HeaterState new_state = static_cast<HeaterState>(state_raw);
-    
+
+    // Override stale STOPPING_COOLING: heater firmware sometimes gets stuck
+    // If no activity (fan=0, pump=0) for >5 min, treat as OFF
+    if (new_state == HeaterState::STOPPING_COOLING) {
+      uint16_t duration = read_uint16_be(frame, 20);
+      uint16_t fan_raw = read_uint16_be(frame, 28);
+      uint8_t pump_raw = frame[23];
+      if (duration > STOPPING_COOLING_TIMEOUT_S && fan_raw == 0 && pump_raw == 0) {
+        ESP_LOGW(TAG, "Stale STOPPING_COOLING (%us, fan=0, pump=0) -> treating as OFF", duration);
+        new_state = HeaterState::OFF;
+      }
+    }
+
     if (new_state != current_state_) {
       if (new_state == HeaterState::STABLE_COMBUSTION) {
         time_stable_combustion_entered_ = millis();
