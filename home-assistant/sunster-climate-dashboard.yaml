@@ -1,16 +1,19 @@
-# Sunster Heater – modusabhängige Climate-Karte
-# Im Automatic-Modus: Temperatur-Auswahl
-# Im Manual- oder Lüften-Modus: Leistung 10–100%
+# Sunster Heater – mode-dependent Climate card
+# HVAC modes map to UI display:
+#   AUTO  → Temperature control (thermostat card)
+#   HEAT  → Power control 10–100% (slider)
+#   COOL  → Antifreeze (autonomous, no extra UI)
+#   FAN_ONLY → Fan only / power control (slider)
 #
-# Anleitung:
-# 1. Template-Sensor (template-sensor.yaml) in configuration.yaml unter template: einbinden
-# 2. Input Number (input-number.yaml) in configuration.yaml unter input_number: einbinden
-# 3. Automations (automation.yaml) in configuration.yaml unter automation: einbinden (oder als package)
-# 4. Beide Karten ins Dashboard einfügen
-# 5. climate.van_heater ggf. durch deine Entity-ID ersetzen
+# Setup:
+# 1. Include template-sensor.yaml in configuration.yaml under template:
+# 2. Include input-number.yaml in configuration.yaml under input_number:
+# 3. Include automation.yaml in configuration.yaml under automation: (or as package)
+# 4. Add both cards below to your dashboard
+# 5. Replace climate.van_heater with your Climate entity ID if needed
 
-# ========== 1. Template-Sensor (siehe template-sensor.yaml) ==========
-# Dieser Sensor bestimmt, ob Temperatur- oder Leistungs-UI angezeigt wird.
+# ========== 1. Template-Sensor (see template-sensor.yaml) ==========
+# Determines whether to show temperature or power UI based on HVAC mode.
 #
 # template:
 #   - sensor:
@@ -18,17 +21,18 @@
 #         unique_id: sunster_van_heater_ui_mode
 #         state: >
 #           {% set e = 'climate.van_heater' %}
-#           {% set preset = state_attr(e, 'preset_mode') %}
 #           {% set mode = states(e) %}
-#           {% if preset == 'Automatic' %}
+#           {% if mode == 'auto' %}
 #             temperature
-#           {% elif preset == 'Manual' or mode == 'fan_only' %}
+#           {% elif mode in ['heat', 'fan_only'] %}
 #             power
+#           {% elif mode == 'cool' %}
+#             antifreeze
 #           {% else %}
-#             temperature
+#             off
 #           {% endif %}
 
-# ========== 3. Automations (siehe automation.yaml) ==========
+# ========== 2. Automations (see automation.yaml) ==========
 # automation:
 #   - id: van_heater_power_to_climate
 #     trigger:
@@ -46,12 +50,10 @@
 #       - platform: state
 #         entity_id:
 #           - climate.van_heater
-#         attribute:
-#           - preset_mode
-#           - fan_mode
+#         attribute: fan_mode
 #     condition:
 #       - condition: template
-#         value_template: "{{ state_attr('climate.van_heater', 'preset_mode') != 'Automatic' }}"
+#         value_template: "{{ states('climate.van_heater') in ['heat', 'fan_only'] }}"
 #     action:
 #       - service: input_number.set_value
 #         target:
@@ -59,10 +61,10 @@
 #         data:
 #           value: "{{ state_attr('climate.van_heater', 'fan_mode') | replace('%', '') | int | default(10) }}"
 
-# ========== 4. Dashboard-Karten (untereinander oder in einer Spalte) ==========
-# Ersetze climate.van_heater durch deine Climate-Entity-ID.
+# ========== 3. Dashboard cards (stack vertically or in a column) ==========
+# Replace climate.van_heater with your Climate entity ID.
 
-# Karte A: Temperatur-Anzeige (nur bei Automatic)
+# Card A: Temperature display (Auto mode only)
 type: conditional
 conditions:
   - condition: state
@@ -73,8 +75,8 @@ card:
   entity: climate.van_heater
 
 ---
-# Karte B: Leistungs-Steuerung (bei Manual oder Lüften) – Fader/Slider
-# Benötigt input_number.van_heater_power und Automations (siehe Ordner).
+# Card B: Power control (Heat or Fan Only mode) – slider
+# Requires input_number.van_heater_power and automations (see folder).
 type: conditional
 conditions:
   - condition: state
@@ -86,4 +88,4 @@ card:
     - entity: climate.van_heater
       secondary_info: last-changed
     - entity: input_number.van_heater_power
-      name: Leistung
+      name: Power Level

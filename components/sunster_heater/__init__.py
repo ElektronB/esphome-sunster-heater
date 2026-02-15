@@ -77,6 +77,7 @@ CONF_OUTPUT_ON_THRESHOLD_NUMBER = "output_on_threshold_number"
 CONTROL_MODE_MANUAL = "manual"
 CONTROL_MODE_AUTOMATIC = "automatic"
 CONTROL_MODE_ANTIFREEZE = "antifreeze"
+CONTROL_MODE_FAN_ONLY = "fan_only"
 
 # Sensor configuration keys
 CONF_INPUT_VOLTAGE = "input_voltage"
@@ -203,7 +204,12 @@ CONFIG_SCHEMA = cv.All(
             cv.Required(CONF_UART_ID): cv.use_id(uart.UARTComponent),
             cv.Optional(CONF_AUTO_SENSORS, default=True): cv.boolean,
             cv.Optional(CONF_CONTROL_MODE, default=CONTROL_MODE_MANUAL): cv.enum(
-                {CONTROL_MODE_MANUAL: "manual", CONTROL_MODE_AUTOMATIC: "automatic", CONTROL_MODE_ANTIFREEZE: "antifreeze"},
+                {
+                    CONTROL_MODE_MANUAL: "manual",
+                    CONTROL_MODE_AUTOMATIC: "automatic",
+                    CONTROL_MODE_ANTIFREEZE: "antifreeze",
+                    CONTROL_MODE_FAN_ONLY: "fan_only",
+                },
                 upper=False
             ),
             cv.Optional(CONF_DEFAULT_POWER_PERCENT, default=80.0): cv.float_range(
@@ -424,6 +430,8 @@ async def to_code(config):
         cg.add(var.set_control_mode(cg.RawExpression("esphome::sunster_heater::ControlMode::AUTOMATIC")))
     elif control_mode == CONTROL_MODE_ANTIFREEZE:
         cg.add(var.set_control_mode(cg.RawExpression("esphome::sunster_heater::ControlMode::ANTIFREEZE")))
+    elif control_mode == CONTROL_MODE_FAN_ONLY:
+        cg.add(var.set_control_mode(cg.RawExpression("esphome::sunster_heater::ControlMode::FAN_ONLY")))
     else:
         cg.add(var.set_control_mode(cg.RawExpression("esphome::sunster_heater::ControlMode::MANUAL")))
 
@@ -574,7 +582,7 @@ async def to_code(config):
     if CONF_CONTROL_MODE_SELECT in config:
         sel = await select.new_select(
             config[CONF_CONTROL_MODE_SELECT],
-            options=["Manual", "Automatic", "Antifreeze"]
+            options=["Manual", "Automatic", "Antifreeze", "Fan Only"]
         )
         cg.add(sel.set_sunster_heater(var))
         cg.add(var.set_control_mode_select(sel))

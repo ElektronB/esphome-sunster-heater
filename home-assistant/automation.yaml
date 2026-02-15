@@ -1,10 +1,10 @@
-# Automations für bidirektionale Sync zwischen input_number und climate.fan_mode
-# In configuration.yaml unter "automation:" einbinden (oder als package importieren).
-# Ersetze climate.van_heater und input_number.van_heater_power bei abweichenden Entity-IDs.
+# Automations for bidirectional sync between input_number and climate.fan_mode
+# Include in configuration.yaml under "automation:" (or import as package).
+# Replace climate.van_heater and input_number.van_heater_power if your entity IDs differ.
 
 - id: van_heater_power_to_climate
-  alias: "Van Heater – Slider zu Climate"
-  description: "Überträgt Änderungen am Leistungs-Fader an die Climate-Entity"
+  alias: "Van Heater – Slider to Climate"
+  description: "Syncs power slider changes to the Climate entity"
   trigger:
     - platform: state
       entity_id:
@@ -17,20 +17,18 @@
         fan_mode: "{{ states('input_number.van_heater_power') }}%"
 
 - id: van_heater_climate_to_power
-  alias: "Van Heater – Climate zu Slider"
-  description: "Synchronisiert Climate-Leistung in den Fader (bei Manual/Lüften)"
+  alias: "Van Heater – Climate to Slider"
+  description: "Syncs Climate fan_mode to power slider (in Heat/Fan Only mode)"
   trigger:
     - platform: state
       entity_id:
         - climate.van_heater
-      attribute:
-        - preset_mode
-        - fan_mode
+      attribute: fan_mode
     - platform: homeassistant
       event: start
   condition:
     - condition: template
-      value_template: "{{ state_attr('climate.van_heater', 'preset_mode') != 'Automatic' }}"
+      value_template: "{{ states('climate.van_heater') in ['heat', 'fan_only'] }}"
   action:
     - service: input_number.set_value
       target:

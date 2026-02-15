@@ -807,6 +807,8 @@ void SunsterHeater::publish_all_config_entities_() {
       mode = "Automatic";
     else if (is_antifreeze_mode())
       mode = "Antifreeze";
+    else if (is_fan_only_mode())
+      mode = "Fan Only";
     control_mode_select_->publish_state(mode);
     ESP_LOGD(TAG, "[CONFIG] push ControlMode = %s", mode);
   }
@@ -1263,7 +1265,11 @@ void SunsterHeater::set_control_mode(ControlMode mode) {
     time_prev_ = 0;
     slope_filtered_ = 0.0f;
   }
-  
+  // FAN_ONLY: protocol has no fan-only state, placeholder for future OEM analysis
+  if (mode == ControlMode::FAN_ONLY) {
+    ESP_LOGW(TAG, "FAN_ONLY mode selected - protocol support TBD, placeholder only");
+  }
+
   ESP_LOGI(TAG, "Control mode changed from %d to %d", (int)old_mode, (int)mode);
 }
 
@@ -1323,7 +1329,8 @@ void SunsterHeater::dump_config() {
   ESP_LOGCONFIG(TAG, "  Passive Sniff: %s", passive_sniff_mode_ ? "yes (RX/decode log only, no TX)" : "no");
   ESP_LOGCONFIG(TAG, "  Control Mode: %s",
                 control_mode_ == ControlMode::AUTOMATIC ? "Automatic (PI)" :
-                control_mode_ == ControlMode::ANTIFREEZE ? "Antifreeze" : "Manual");
+                control_mode_ == ControlMode::ANTIFREEZE ? "Antifreeze" :
+                control_mode_ == ControlMode::FAN_ONLY ? "Fan Only (stub)" : "Manual");
   if (control_mode_ == ControlMode::AUTOMATIC) {
     ESP_LOGCONFIG(TAG, "  PI: Kp=%.2f Ki=%.2f, thresholds off<%.0f%% on>%.0f%%, lookahead=%.0fs",
                   pi_kp_, pi_ki_, output_off_threshold_, output_on_threshold_, t_lookahead_s_);

@@ -32,7 +32,8 @@ static const float INJECTED_PER_PULSE = 0.022f; // ml per fuel pump pulse
 enum class ControlMode : uint8_t {
   MANUAL = 0,
   AUTOMATIC = 1,
-  ANTIFREEZE = 2
+  ANTIFREEZE = 2,
+  FAN_ONLY = 3
 };
 
 // Heater states from protocol analysis
@@ -179,6 +180,7 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   bool is_automatic_mode() const { return control_mode_ == ControlMode::AUTOMATIC; }
   bool is_manual_mode() const { return control_mode_ == ControlMode::MANUAL; }
   bool is_antifreeze_mode() const { return control_mode_ == ControlMode::ANTIFREEZE; }
+  bool is_fan_only_mode() const { return control_mode_ == ControlMode::FAN_ONLY; }
 
   // Auto start/stop: when false, PI never calls turn_off(), holds at 10% instead
   void set_allow_auto_stop(bool allow) { allow_auto_stop_ = allow; }
@@ -877,6 +879,7 @@ class SunsterControlModeSelect : public select::Select, public Component {
       const char *mode = "Manual";
       if (heater_->is_automatic_mode()) mode = "Automatic";
       else if (heater_->is_antifreeze_mode()) mode = "Antifreeze";
+      else if (heater_->is_fan_only_mode()) mode = "Fan Only";
       ESP_LOGI(TAG, "[SEND_HA] ControlMode = %s (setup)", mode);
       this->publish_state(mode);
     }
@@ -894,6 +897,8 @@ class SunsterControlModeSelect : public select::Select, public Component {
       this->publish_state("Automatic");
     } else if (heater_->is_antifreeze_mode()) {
       this->publish_state("Antifreeze");
+    } else if (heater_->is_fan_only_mode()) {
+      this->publish_state("Fan Only");
     } else {
       this->publish_state("Manual");
     }
@@ -908,6 +913,7 @@ class SunsterControlModeSelect : public select::Select, public Component {
         const char *mode = "Manual";
         if (heater_->is_automatic_mode()) mode = "Automatic";
         else if (heater_->is_antifreeze_mode()) mode = "Antifreeze";
+        else if (heater_->is_fan_only_mode()) mode = "Fan Only";
         ESP_LOGI(TAG, "[SEND_HA] ControlMode = %s (first loop)", mode);
       }
       last_mode_publish_ = now;
@@ -922,6 +928,8 @@ class SunsterControlModeSelect : public select::Select, public Component {
         heater_->set_control_mode(ControlMode::AUTOMATIC);
       } else if (value == "Antifreeze") {
         heater_->set_control_mode(ControlMode::ANTIFREEZE);
+      } else if (value == "Fan Only") {
+        heater_->set_control_mode(ControlMode::FAN_ONLY);
       }
       this->publish_state(value);
     }
