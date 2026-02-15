@@ -89,8 +89,8 @@ void SunsterClimate::control(const climate::ClimateCall &call) {
     heater_->set_power_level_percent(pct);
   }
 
-  if (call.get_custom_preset().has_value()) {
-    std::string preset = *call.get_custom_preset();
+  if (call.has_custom_preset()) {
+    auto preset = call.get_custom_preset();
     if (preset == "Defreeze") {
       heater_->set_control_mode(ControlMode::ANTIFREEZE);
       // Don't call turn_on() -- antifreeze handler manages on/off based on temperature thresholds
