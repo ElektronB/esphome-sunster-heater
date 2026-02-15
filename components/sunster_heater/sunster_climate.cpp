@@ -39,11 +39,11 @@ climate::ClimateTraits SunsterClimate::traits() {
   traits.add_supported_mode(climate::CLIMATE_MODE_OFF);
   traits.add_supported_mode(climate::CLIMATE_MODE_HEAT);
   traits.add_supported_mode(climate::CLIMATE_MODE_AUTO);
-  traits.add_supported_mode(climate::CLIMATE_MODE_COOL);
   traits.add_supported_mode(climate::CLIMATE_MODE_FAN_ONLY);
   traits.add_feature_flags(climate::CLIMATE_SUPPORTS_CURRENT_TEMPERATURE |
                            climate::CLIMATE_SUPPORTS_ACTION);
   traits.set_supported_custom_fan_modes({"10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%"});
+  traits.set_supported_custom_presets({"Defreeze"});
   traits.set_visual_min_temperature(min_temperature_);
   traits.set_visual_max_temperature(max_temperature_);
   traits.set_visual_temperature_step(0.5f);
@@ -70,10 +70,6 @@ void SunsterClimate::control(const climate::ClimateCall &call) {
         heater_->set_automatic_master_enabled(true);
         heater_->turn_on();
         break;
-      case climate::CLIMATE_MODE_COOL:
-        heater_->set_control_mode(ControlMode::ANTIFREEZE);
-        // Don't call turn_on() -- antifreeze handler manages on/off based on temperature thresholds
-        break;
       case climate::CLIMATE_MODE_FAN_ONLY:
         heater_->set_control_mode(ControlMode::FAN_ONLY);
         ESP_LOGW(CLIMATE_TAG, "FAN_ONLY mode: protocol support TBD, placeholder only");
@@ -91,6 +87,14 @@ void SunsterClimate::control(const climate::ClimateCall &call) {
   if (call.has_custom_fan_mode()) {
     float pct = parse_power_percent(call.get_custom_fan_mode().c_str());
     heater_->set_power_level_percent(pct);
+  }
+
+  if (call.get_custom_preset().has_value()) {
+    std::string preset = *call.get_custom_preset();
+    if (preset == "Defreeze") {
+      heater_->set_control_mode(ControlMode::ANTIFREEZE);
+      // Don't call turn_on() -- antifreeze handler manages on/off based on temperature thresholds
+    }
   }
 
   this->update();
@@ -116,6 +120,7 @@ void SunsterClimate::update() {
 
   switch (cmode) {
     case ControlMode::MANUAL:
+      this->preset = climate::CLIMATE_PRESET_NONE;
       if (heater_on) {
         this->mode = climate::CLIMATE_MODE_HEAT;
         this->action = is_heating ? climate::CLIMATE_ACTION_HEATING
@@ -127,6 +132,7 @@ void SunsterClimate::update() {
       break;
 
     case ControlMode::AUTOMATIC:
+      this->preset = climate::CLIMATE_PRESET_NONE;
       if (heater_->is_automatic_master_enabled()) {
         // PI is active -- show AUTO regardless of heater on/off (PI manages on/off)
         this->mode = climate::CLIMATE_MODE_AUTO;
@@ -140,13 +146,15 @@ void SunsterClimate::update() {
       break;
 
     case ControlMode::ANTIFREEZE:
-      // Antifreeze handler manages on/off autonomously -- always show COOL
-      this->mode = climate::CLIMATE_MODE_COOL;
+      // Antifreeze handler manages on/off autonomously -- show HEAT + "Defreeze" preset
+      this->mode = climate::CLIMATE_MODE_HEAT;
+      this->set_custom_preset_("Defreeze");
       this->action = is_heating ? climate::CLIMATE_ACTION_HEATING
                                 : climate::CLIMATE_ACTION_IDLE;
       break;
 
     case ControlMode::FAN_ONLY:
+      this->preset = climate::CLIMATE_PRESET_NONE;
       this->mode = climate::CLIMATE_MODE_FAN_ONLY;
       this->action = climate::CLIMATE_ACTION_FAN;
       break;

@@ -1,9 +1,9 @@
 # Sunster Heater – mode-dependent Climate card
 # HVAC modes map to UI display:
-#   AUTO  → Temperature control (thermostat card)
-#   HEAT  → Power control 10–100% (slider)
-#   COOL  → Antifreeze (autonomous, no extra UI)
+#   AUTO     → Temperature control (thermostat card)
+#   HEAT     → Power control 10–100% (slider)
 #   FAN_ONLY → Fan only / power control (slider)
+# Preset "Defreeze" → Antifreeze (autonomous temperature-based control)
 #
 # Setup:
 # 1. Include template-sensor.yaml in configuration.yaml under template:
@@ -13,7 +13,7 @@
 # 5. Replace climate.van_heater with your Climate entity ID if needed
 
 # ========== 1. Template-Sensor (see template-sensor.yaml) ==========
-# Determines whether to show temperature or power UI based on HVAC mode.
+# Determines whether to show temperature or power UI based on HVAC mode and preset.
 #
 # template:
 #   - sensor:
@@ -22,12 +22,13 @@
 #         state: >
 #           {% set e = 'climate.van_heater' %}
 #           {% set mode = states(e) %}
-#           {% if mode == 'auto' %}
+#           {% set preset = state_attr(e, 'preset_mode') %}
+#           {% if preset == 'Defreeze' %}
+#             defreeze
+#           {% elif mode == 'auto' %}
 #             temperature
 #           {% elif mode in ['heat', 'fan_only'] %}
 #             power
-#           {% elif mode == 'cool' %}
-#             antifreeze
 #           {% else %}
 #             off
 #           {% endif %}

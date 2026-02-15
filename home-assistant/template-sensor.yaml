@@ -8,12 +8,13 @@
       state: >
         {% set e = 'climate.van_heater' %}
         {% set mode = states(e) %}
-        {% if mode == 'auto' %}
+        {% set preset = state_attr(e, 'preset_mode') %}
+        {% if preset == 'Defreeze' %}
+          defreeze
+        {% elif mode == 'auto' %}
           temperature
         {% elif mode in ['heat', 'fan_only'] %}
           power
-        {% elif mode == 'cool' %}
-          antifreeze
         {% else %}
           off
         {% endif %}
