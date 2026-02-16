@@ -334,7 +334,9 @@ void SunsterHeater::send_controller_frame() {
       frame.push_back(0x02);              // 2: Status request
     }
   } else {
-    if (current_state_ == HeaterState::OFF) {
+    if (hardware_stopping_cooling_stale_) {
+      frame.push_back(0x06);              // 2: Stop command (force hardware out of STOPPING_COOLING)
+    } else if (current_state_ == HeaterState::OFF) {
       frame.push_back(0x06);              // 2: Start command
     } else {
       frame.push_back(0x02);              // 2: Status request
@@ -356,7 +358,9 @@ void SunsterHeater::send_controller_frame() {
       frame.push_back(0x02);              // 9: Off
     }
   } else {
-    if (current_state_ == HeaterState::OFF) {
+    if (hardware_stopping_cooling_stale_) {
+      frame.push_back(0x05);              // 9: Set off (force hardware to acknowledge OFF)
+    } else if (current_state_ == HeaterState::OFF) {
       frame.push_back(0x06);              // 9: Start
     } else {
       frame.push_back(0x08);              // 9: Running
@@ -380,6 +384,11 @@ void SunsterHeater::send_controller_frame() {
     return;
   }
   
+  // Log STOP-before-START for stale STOPPING_COOLING debugging
+  if (heater_enabled_ && hardware_stopping_cooling_stale_) {
+    ESP_LOGW(TAG, "Sending STOP to force hardware out of stale STOPPING_COOLING before START");
+  }
+
   // Send frame
   this->write_array(frame.data(), frame.size());
 
@@ -405,7 +414,8 @@ void SunsterHeater::process_heater_frame(const std::vector<uint8_t> &frame) {
     HeaterState new_state = static_cast<HeaterState>(state_raw);
 
     // Override stale STOPPING_COOLING: heater firmware sometimes gets stuck
-    // If no activity (fan=0, pump=0) for >5 min, treat as OFF
+    // If no activity (fan=0, pump=0) for >5 min, treat as OFF on ESP side
+    // and set flag so send_controller_frame() sends STOP to force hardware out
     if (new_state == HeaterState::STOPPING_COOLING) {
       uint16_t duration = read_uint16_be(frame, 20);
       uint16_t fan_raw = read_uint16_be(frame, 28);
@@ -413,7 +423,10 @@ void SunsterHeater::process_heater_frame(const std::vector<uint8_t> &frame) {
       if (duration > STOPPING_COOLING_TIMEOUT_S && fan_raw == 0 && pump_raw == 0) {
         ESP_LOGW(TAG, "Stale STOPPING_COOLING (%us, fan=0, pump=0) -> treating as OFF", duration);
         new_state = HeaterState::OFF;
+        hardware_stopping_cooling_stale_ = true;
       }
+    } else {
+      hardware_stopping_cooling_stale_ = false;
     }
 
     if (new_state != current_state_) {
