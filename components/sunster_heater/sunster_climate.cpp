@@ -51,7 +51,8 @@ void SunsterClimate::control(const climate::ClimateCall &call) {
         break;
       case climate::CLIMATE_MODE_FAN_ONLY:
         heater_->set_control_mode(ControlMode::FAN_ONLY);
-        ESP_LOGW(CLIMATE_TAG, "FAN_ONLY mode: protocol support TBD, placeholder only");
+        heater_->set_automatic_master_enabled(true);
+        heater_->turn_on();
         break;
       default:
         break;
@@ -120,8 +121,13 @@ void SunsterClimate::update() {
 
     case ControlMode::FAN_ONLY:
       this->target_temperature = NAN;
-      this->mode = climate::CLIMATE_MODE_FAN_ONLY;
-      this->action = climate::CLIMATE_ACTION_FAN;
+      if (heater_on) {
+        this->mode = climate::CLIMATE_MODE_FAN_ONLY;
+        this->action = climate::CLIMATE_ACTION_FAN;
+      } else {
+        this->mode = climate::CLIMATE_MODE_OFF;
+        this->action = climate::CLIMATE_ACTION_OFF;
+      }
       break;
   }
 

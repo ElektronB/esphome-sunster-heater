@@ -43,6 +43,7 @@ enum class HeaterState : uint8_t {
   HEATING_UP = 0x02,
   STABLE_COMBUSTION = 0x03,
   STOPPING_COOLING = 0x04,
+  VENTILATION = 0x06,       // Fan-only mode, no combustion
   UNKNOWN = 0xFF
 };
 

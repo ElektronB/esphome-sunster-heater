@@ -358,7 +358,9 @@ void SunsterHeater::send_controller_frame() {
       frame.push_back(0x02);              // 9: Off
     }
   } else {
-    if (hardware_stopping_cooling_stale_) {
+    if (control_mode_ == ControlMode::FAN_ONLY) {
+      frame.push_back(0x14);              // 9: Ventilation (fan only)
+    } else if (hardware_stopping_cooling_stale_) {
       frame.push_back(0x05);              // 9: Set off (force hardware to acknowledge OFF)
     } else if (current_state_ == HeaterState::OFF) {
       frame.push_back(0x06);              // 9: Start
@@ -1248,6 +1250,7 @@ const char* SunsterHeater::state_to_string(HeaterState state) {
     case HeaterState::HEATING_UP: return "Heating Up";
     case HeaterState::STABLE_COMBUSTION: return "Stable Combustion";
     case HeaterState::STOPPING_COOLING: return "Stopping/Cooling";
+    case HeaterState::VENTILATION: return "Ventilation";
     default: return "Unknown";
   }
 }
@@ -1290,9 +1293,8 @@ void SunsterHeater::set_control_mode(ControlMode mode) {
     time_prev_ = 0;
     slope_filtered_ = 0.0f;
   }
-  // FAN_ONLY: protocol has no fan-only state, placeholder for future OEM analysis
   if (mode == ControlMode::FAN_ONLY) {
-    ESP_LOGW(TAG, "FAN_ONLY mode selected - protocol support TBD, placeholder only");
+    ESP_LOGI(TAG, "FAN_ONLY mode selected - sending ventilation command (0x14)");
   }
 
   ESP_LOGI(TAG, "Control mode changed from %d to %d", (int)old_mode, (int)mode);
