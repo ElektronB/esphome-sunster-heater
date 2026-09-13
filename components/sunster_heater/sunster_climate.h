@@ -4,6 +4,7 @@
 #include "esphome/components/climate/climate_mode.h"
 #include "esphome/components/climate/climate_traits.h"
 #include "esphome/core/component.h"
+#include <cmath>
 
 namespace esphome {
 namespace sunster_heater {
@@ -27,6 +28,13 @@ class SunsterClimate : public climate::Climate, public PollingComponent {
   SunsterHeater *heater_{nullptr};
   float min_temperature_{10.0f};
   float max_temperature_{100.0f};
+
+  // Deduplicate climate publishes
+  bool state_published_once_{false};
+  climate::ClimateMode last_published_mode_{climate::CLIMATE_MODE_OFF};
+  climate::ClimateAction last_published_action_{climate::CLIMATE_ACTION_OFF};
+  float last_published_current_{NAN};
+  float last_published_target_{NAN};
 };
 
 }  // namespace sunster_heater

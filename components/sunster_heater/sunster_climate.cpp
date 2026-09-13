@@ -1,6 +1,7 @@
 #include "sunster_climate.h"
 #include "sunster_heater.h"
 #include "esphome/core/log.h"
+#include <cmath>
 
 namespace esphome {
 namespace sunster_heater {
@@ -124,7 +125,25 @@ void SunsterClimate::update() {
       break;
   }
 
-  this->publish_state();
+  // Only publish when something user-visible changed (avoids 1 Hz log/HA spam)
+  bool changed = !state_published_once_ ||
+                 this->mode != last_published_mode_ ||
+                 this->action != last_published_action_ ||
+                 std::isnan(last_published_current_) != std::isnan(this->current_temperature) ||
+                 (!std::isnan(this->current_temperature) &&
+                  fabsf(this->current_temperature - last_published_current_) >= 0.05f) ||
+                 std::isnan(last_published_target_) != std::isnan(this->target_temperature) ||
+                 (!std::isnan(this->target_temperature) &&
+                  fabsf(this->target_temperature - last_published_target_) >= 0.05f);
+
+  if (changed) {
+    this->publish_state();
+    last_published_mode_ = this->mode;
+    last_published_action_ = this->action;
+    last_published_current_ = this->current_temperature;
+    last_published_target_ = this->target_temperature;
+    state_published_once_ = true;
+  }
 }
 
 }  // namespace sunster_heater

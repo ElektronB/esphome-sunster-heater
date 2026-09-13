@@ -17,6 +17,31 @@
 namespace esphome {
 namespace sunster_heater {
 
+namespace {
+
+void publish_sensor_if_changed(sensor::Sensor *s, float value, float epsilon = 0.05f) {
+  if (s == nullptr)
+    return;
+  if (!s->has_state() || std::isnan(s->state) || fabsf(s->state - value) >= epsilon)
+    s->publish_state(value);
+}
+
+void publish_text_if_changed(text_sensor::TextSensor *s, const std::string &value) {
+  if (s == nullptr)
+    return;
+  if (!s->has_state() || s->state != value)
+    s->publish_state(value);
+}
+
+void publish_binary_if_changed(binary_sensor::BinarySensor *s, bool value) {
+  if (s == nullptr)
+    return;
+  if (!s->has_state() || s->state != value)
+    s->publish_state(value);
+}
+
+}  // namespace
+
 // Helper function for checksum calculation
 uint8_t calculate_checksum(const std::vector<uint8_t> &frame) {
   if (frame.size() < 4) {
@@ -149,7 +174,7 @@ void SunsterHeater::update() {
     handle_automatic_mode();
   } else if (pi_output_sensor_ && control_mode_ != ControlMode::AUTOMATIC) {
     last_pi_output_ = 0.0f;
-    pi_output_sensor_->publish_state(0.0f);
+    publish_sensor_if_changed(pi_output_sensor_, 0.0f, 0.5f);
   }
   // Handle antifreeze mode logic
   if (control_mode_ == ControlMode::ANTIFREEZE) {
@@ -185,7 +210,7 @@ void SunsterHeater::update() {
   if (hourly_consumption_sensor_) {
     // Calculate instantaneous consumption rate: Hz * ml/pulse * 3600 seconds/hour
     float instantaneous_consumption_ml_per_hour = pump_frequency_ * injected_per_pulse_ * 3600.0f;
-    hourly_consumption_sensor_->publish_state(instantaneous_consumption_ml_per_hour);
+    publish_sensor_if_changed(hourly_consumption_sensor_, instantaneous_consumption_ml_per_hour, 0.01f);
   }
 }
 
@@ -482,14 +507,12 @@ void SunsterHeater::process_heater_frame(const std::vector<uint8_t> &frame) {
 
 void SunsterHeater::update_sensors(const std::vector<uint8_t> &frame) {
   // State sensor
-  if (state_sensor_) {
-    state_sensor_->publish_state(state_to_string(current_state_));
-  }
+  publish_text_if_changed(state_sensor_, state_to_string(current_state_));
   
   // Power level (byte 6)
   uint8_t power_level_raw = frame[6];
   if (power_level_sensor_ && power_level_raw > 0 && power_level_raw <= 10) {
-    power_level_sensor_->publish_state(power_level_raw * 10);
+    publish_sensor_if_changed(power_level_sensor_, power_level_raw * 10.0f, 0.5f);
   }
   
   // Input voltage (bytes 10-11, uint16 big-endian / 10.0) - newer protocol
@@ -497,7 +520,7 @@ void SunsterHeater::update_sensors(const std::vector<uint8_t> &frame) {
     uint16_t voltage_raw = read_uint16_be(frame, 10);
     if (voltage_raw > 0) {
       input_voltage_ = voltage_raw / 10.0f;
-      input_voltage_sensor_->publish_state(input_voltage_);
+      publish_sensor_if_changed(input_voltage_sensor_, input_voltage_, 0.05f);
     }
   }
   
@@ -508,14 +531,14 @@ void SunsterHeater::update_sensors(const std::vector<uint8_t> &frame) {
     if (current_state_ == HeaterState::POLLING_STATE) {
       status = (fan == 0) ? "Preheat" : "Ignition";
     }
-    glow_plug_status_sensor_->publish_state(status);
+    publish_text_if_changed(glow_plug_status_sensor_, status);
   }
   
   // Cooling down flag (byte 14)
   uint8_t cooling_flag = frame[14];
   if (cooling_down_sensor_) {
     cooling_down_ = (cooling_flag != 0);
-    cooling_down_sensor_->publish_state(cooling_down_);
+    publish_binary_if_changed(cooling_down_sensor_, cooling_down_);
   }
   
   // Heat exchanger temperature (bytes 16-17, int16 big-endian / 10.0) - newer protocol
@@ -523,20 +546,20 @@ void SunsterHeater::update_sensors(const std::vector<uint8_t> &frame) {
     // Read as signed int16 to handle negative temperatures correctly
     int16_t temp_raw = static_cast<int16_t>(read_uint16_be(frame, 16));
     heat_exchanger_temperature_ = temp_raw / 10.0f;
-    heat_exchanger_temperature_sensor_->publish_state(heat_exchanger_temperature_);
+    publish_sensor_if_changed(heat_exchanger_temperature_sensor_, heat_exchanger_temperature_, 0.05f);
     
     // Update current temperature for climate control (no duplicate temperature sensor)
     current_temperature_ = heat_exchanger_temperature_;
   }
   
-  // State duration (bytes 20-21)
+  // State duration (bytes 20-21) — publish every ~5s of change to avoid 1 Hz spam
   if (state_duration_sensor_ && frame.size() > 21) {
     uint16_t duration_raw = read_uint16_be(frame, 20);
-    state_duration_sensor_->publish_state(duration_raw);
+    publish_sensor_if_changed(state_duration_sensor_, duration_raw, 4.5f);
   }
   
   // Pump frequency (byte 23)
-  if (pump_frequency_sensor_ && frame.size() > 23) {
+  if (frame.size() > 23) {
     uint8_t pump_raw = frame[23];
     float new_pump_frequency = pump_raw / 10.0f;
     
@@ -544,13 +567,13 @@ void SunsterHeater::update_sensors(const std::vector<uint8_t> &frame) {
     update_fuel_consumption(new_pump_frequency);
     
     pump_frequency_ = new_pump_frequency;
-    pump_frequency_sensor_->publish_state(pump_frequency_);
+    publish_sensor_if_changed(pump_frequency_sensor_, pump_frequency_, 0.05f);
   }
   
   // Fan speed (bytes 28-29)
   if (fan_speed_sensor_ && frame.size() > 29) {
     fan_speed_ = read_uint16_be(frame, 28);
-    fan_speed_sensor_->publish_state(fan_speed_);
+    publish_sensor_if_changed(fan_speed_sensor_, static_cast<float>(fan_speed_), 0.5f);
   }
 }
 
@@ -895,18 +918,10 @@ void SunsterHeater::check_voltage_safety() {
   // Update error state
   if (voltage_error != low_voltage_error_) {
     low_voltage_error_ = voltage_error;
-    if (low_voltage_error_sensor_) {
-      low_voltage_error_sensor_->publish_state(low_voltage_error_);
-    }
-  } else if (!voltage_error && low_voltage_error_) {
-    // Clear error if voltage has recovered
-    low_voltage_error_ = false;
-    if (low_voltage_error_sensor_) {
-      low_voltage_error_sensor_->publish_state(false);
-    }
+    publish_binary_if_changed(low_voltage_error_sensor_, low_voltage_error_);
   } else if (low_voltage_error_sensor_ && input_voltage_ > 0.0f && !voltage_error) {
-    // Publish "no error" when voltage is valid so the entity is not stuck as "unknown"
-    low_voltage_error_sensor_->publish_state(false);
+    // Ensure entity leaves "unknown" once voltage is known (publish-on-change only)
+    publish_binary_if_changed(low_voltage_error_sensor_, false);
   }
 }
 
@@ -1024,7 +1039,7 @@ void SunsterHeater::handle_automatic_mode() {
       ESP_LOGW(TAG, "[PI] Invalid sensor value (%.1f°C), skipping PI calculation", external_temperature_);
     }
     last_pi_output_ = 0.0f;
-    if (pi_output_sensor_) pi_output_sensor_->publish_state(0.0f);
+    publish_sensor_if_changed(pi_output_sensor_, 0.0f, 0.5f);
     time_entered_off_region_ = 0;
     if (!sensor_has_state && time_external_temp_lost_ == 0) {
       time_external_temp_lost_ = millis();
@@ -1052,7 +1067,7 @@ void SunsterHeater::handle_automatic_mode() {
           turn_off();
         }
         last_pi_output_ = 0.0f;
-        if (pi_output_sensor_) pi_output_sensor_->publish_state(0.0f);
+        publish_sensor_if_changed(pi_output_sensor_, 0.0f, 0.5f);
         time_external_temp_lost_ = 0;
         return;
       } else {
@@ -1067,7 +1082,7 @@ void SunsterHeater::handle_automatic_mode() {
       turn_off();
     }
     last_pi_output_ = 0.0f;
-    if (pi_output_sensor_) pi_output_sensor_->publish_state(0.0f);
+    publish_sensor_if_changed(pi_output_sensor_, 0.0f, 0.5f);
     time_external_temp_lost_ = 0;
     return;
   }
@@ -1078,7 +1093,7 @@ void SunsterHeater::handle_automatic_mode() {
       turn_off();
     }
     last_pi_output_ = 0.0f;
-    if (pi_output_sensor_) pi_output_sensor_->publish_state(0.0f);
+    publish_sensor_if_changed(pi_output_sensor_, 0.0f, 0.5f);
     time_entered_off_region_ = 0;
     return;
   }
@@ -1086,7 +1101,7 @@ void SunsterHeater::handle_automatic_mode() {
   // Cooldown: output 0%, no integral windup (only when not actively trying to start)
   if (current_state_ == HeaterState::STOPPING_COOLING && !heater_enabled_) {
     last_pi_output_ = 0.0f;
-    if (pi_output_sensor_) pi_output_sensor_->publish_state(0.0f);
+    publish_sensor_if_changed(pi_output_sensor_, 0.0f, 0.5f);
     time_entered_off_region_ = 0;
     ESP_LOGV(TAG, "[PI] target=%.1f measured=%.1f out=0.0 (state=Cooldown) no windup", target_temperature_, external_temperature_);
     return;
@@ -1095,7 +1110,7 @@ void SunsterHeater::handle_automatic_mode() {
   if (current_state_ == HeaterState::POLLING_STATE || current_state_ == HeaterState::HEATING_UP) {
     const float preheat_output = 10.0f;
     last_pi_output_ = preheat_output;
-    if (pi_output_sensor_) pi_output_sensor_->publish_state(preheat_output);
+    publish_sensor_if_changed(pi_output_sensor_, preheat_output, 0.5f);
     time_entered_off_region_ = 0;
     ESP_LOGV(TAG, "[PI] target=%.1f measured=%.1f out=%.0f (state=Preheat, min) no windup", target_temperature_, external_temperature_, preheat_output);
     return;
@@ -1123,11 +1138,12 @@ void SunsterHeater::handle_automatic_mode() {
       time_prev_ = now;
       if (heater_enabled_) set_power_level_percent(10.0f);
       last_pi_output_ = 10.0f;
-      if (pi_output_sensor_) pi_output_sensor_->publish_state(10.0f);
-      if (predicted_temperature_sensor_) predicted_temperature_sensor_->publish_state(external_temperature_ + slope_filtered_ * t_lookahead_s_);
-      if (slope_sensor_) slope_sensor_->publish_state(slope_filtered_);
+      publish_sensor_if_changed(pi_output_sensor_, 10.0f, 0.5f);
+      publish_sensor_if_changed(predicted_temperature_sensor_,
+                                external_temperature_ + slope_filtered_ * t_lookahead_s_, 0.05f);
+      publish_sensor_if_changed(slope_sensor_, slope_filtered_, 0.0001f);
       time_entered_off_region_ = 0;
-      ESP_LOGD(TAG, "[PI] Slope warmup %.0fs/%.0fs measured=%.2f slope=%.4f (holding 10%%)",
+      ESP_LOGV(TAG, "[PI] Slope warmup %.0fs/%.0fs measured=%.2f slope=%.4f (holding 10%%)",
                stable_elapsed_ms / 1000.0f, slope_window_s_, external_temperature_, slope_filtered_);
       return;
     }
@@ -1135,7 +1151,7 @@ void SunsterHeater::handle_automatic_mode() {
     if (!slope_warmup_done_) {
       slope_warmup_done_ = true;
       pi_integral_ = 0.0f;
-      ESP_LOGD(TAG, "[PI] Slope warmup complete, integrator reset, slope=%.4f", slope_filtered_);
+      ESP_LOGI(TAG, "[PI] Slope warmup complete, integrator reset, slope=%.4f", slope_filtered_);
     }
   }
 
@@ -1156,8 +1172,8 @@ void SunsterHeater::handle_automatic_mode() {
   float t_pred = external_temperature_ + slope_filtered_ * t_lookahead_s_;
   float error = target_temperature_ - t_pred;
 
-  if (predicted_temperature_sensor_) predicted_temperature_sensor_->publish_state(t_pred);
-  if (slope_sensor_) slope_sensor_->publish_state(slope_filtered_);
+  publish_sensor_if_changed(predicted_temperature_sensor_, t_pred, 0.05f);
+  publish_sensor_if_changed(slope_sensor_, slope_filtered_, 0.0001f);
 
   // Pure PI (no D), output ±100%; anti-windup
   float output_raw = std::max(-100.0f, std::min(100.0f, pi_kp_ * error + pi_integral_));
@@ -1173,7 +1189,7 @@ void SunsterHeater::handle_automatic_mode() {
   }
   last_error_ = error;
   last_pi_output_ = output_raw;
-  if (pi_output_sensor_) pi_output_sensor_->publish_state(output_raw);
+  publish_sensor_if_changed(pi_output_sensor_, output_raw, 0.5f);
 
   bool target_below_measured = (target_temperature_ < external_temperature_);
   ESP_LOGV(TAG, "[PI] target=%.2f measured=%.2f T_pred=%.2f slope=%.4f err=%.2f out_raw=%.1f off_thr=%.0f on_thr=%.0f",
@@ -1238,12 +1254,8 @@ void SunsterHeater::handle_communication_timeout() {
   }
   
   // Reset sensors to unknown state
-  if (state_sensor_) {
-    state_sensor_->publish_state("Disconnected");
-  }
-  if (glow_plug_status_sensor_) {
-    glow_plug_status_sensor_->publish_state("Unknown");
-  }
+  publish_text_if_changed(state_sensor_, "Disconnected");
+  publish_text_if_changed(glow_plug_status_sensor_, "Unknown");
 }
 
 const char* SunsterHeater::state_to_string(HeaterState state) {

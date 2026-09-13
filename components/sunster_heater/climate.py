@@ -19,7 +19,7 @@ CONFIG_SCHEMA = climate.climate_schema(SunsterClimate).extend(
         cv.Optional(CONF_MIN_TEMPERATURE, default=5.0): cv.float_range(min=0, max=30),
         cv.Optional(CONF_MAX_TEMPERATURE, default=35.0): cv.float_range(min=10, max=50),
     }
-).extend(cv.polling_component_schema("1s"))
+).extend(cv.polling_component_schema("5s"))
 
 
 async def to_code(config):

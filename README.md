@@ -706,15 +706,25 @@ automation:
 - Verify heater is powered on
 - Ensure ESP32 is receiving data first
 
-### Debug Logging
+### Logging
+
+By default use `INFO` — that already cuts most chatter. Sensor/climate state lines (`[S]`) only appear when values **change**, so HA history and `esphome logs` stay quiet when the heater is idle.
+
+```yaml
+logger:
+  level: INFO
+```
+
+For debugging the PI / UART protocol temporarily:
 
 ```yaml
 logger:
   level: DEBUG
   logs:
-    sunster_heater: VERY_VERBOSE
+    sunster_heater: DEBUG   # or VERBOSE / VERY_VERBOSE
 ```
 
+Note: streaming `esphome logs` does **not** fill the ESP flash. Frequent HA history writes are the storage concern — publish-on-change reduces that.
 ## Protocol Information
 
 This library implements the Sunster/compatible heater communication protocol:
