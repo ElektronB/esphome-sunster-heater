@@ -78,7 +78,7 @@ sunster_heater:
   injected_per_pulse: 0.022
 
   auto_stop_switch:
-    name: "Auto Start/Stop"
+    name: "Auto Start Stop"
 
   # Automatic mode: PI controller, thresholds, prediction (UI configurable)
   pi_kp_number:

@@ -132,7 +132,8 @@ void SunsterHeater::update() {
   } else if (external_temperature_sensor_ != nullptr && time_external_temp_lost_ == 0) {
     // Sensor just lost signal - start grace period timer
     time_external_temp_lost_ = millis();
-    ESP_LOGW(TAG, "External temperature sensor lost signal, starting %ds grace period", PI_SENSOR_GRACE_PERIOD_MS / 1000);
+    ESP_LOGW(TAG, "External temperature sensor lost signal, starting %ds grace period",
+             static_cast<int>(PI_SENSOR_GRACE_PERIOD_MS / 1000));
   }
   
   // Check for daily reset
@@ -671,8 +672,8 @@ void SunsterHeater::save_fuel_consumption_data() {
   data.total_pulses = total_fuel_pulses_;
   
   if (pref_fuel_consumption_.save(&data)) {
-    ESP_LOGD(TAG, "Fuel consumption data saved: %.2f ml, day %d", 
-             data.daily_consumption_ml, data.last_reset_day);
+    ESP_LOGD(TAG, "Fuel consumption data saved: %.2f ml, day %u",
+             data.daily_consumption_ml, static_cast<unsigned>(data.last_reset_day));
   } else {
     ESP_LOGW(TAG, "Failed to save fuel consumption data");
   }
@@ -713,7 +714,7 @@ void SunsterHeater::load_config_data() {
   ESP_LOGI(TAG, "[CONFIG] Reading from flash... (YAML defaults before load: Kp=%.2f Ki=%.2f Target=%.1f)", pi_kp_, pi_ki_, target_temperature_);
   HeaterConfigData data;
   if (pref_config_.load(&data)) {
-    ESP_LOGI(TAG, "[CONFIG] Flash preference loaded, version=%u", data.version);
+    ESP_LOGI(TAG, "[CONFIG] Flash preference loaded, version=%u", static_cast<unsigned>(data.version));
     if (data.version >= 3 && data.version <= 6) {
       if (std::isnan(data.pi_kp) || std::isnan(data.pi_ki) || std::isnan(data.pi_kd) || std::isnan(data.target_temperature)) {
          ESP_LOGW(TAG, "[CONFIG] Loaded data has NAN, using defaults");
@@ -743,7 +744,7 @@ void SunsterHeater::load_config_data() {
       ESP_LOGI(TAG, "[CONFIG] After boot: Kp=%.2f Ki=%.2f target=%.1f t_look=%.0f slope_win=%.0f off_thr=%.0f on_thr=%.0f tmin=%.1fs",
                pi_kp_, pi_ki_, target_temperature_, t_lookahead_s_, slope_window_s_, output_off_threshold_, output_on_threshold_, pi_min_on_time_s_);
     } else {
-      ESP_LOGW(TAG, "[CONFIG] Version mismatch (got %u), using YAML defaults", data.version);
+      ESP_LOGW(TAG, "[CONFIG] Version mismatch (got %u), using YAML defaults", static_cast<unsigned>(data.version));
       save_config_data();
     }
   } else {
@@ -1027,7 +1028,8 @@ void SunsterHeater::handle_automatic_mode() {
     time_entered_off_region_ = 0;
     if (!sensor_has_state && time_external_temp_lost_ == 0) {
       time_external_temp_lost_ = millis();
-      ESP_LOGW(TAG, "[PI] Sensor lost signal, starting %ds grace period", PI_SENSOR_GRACE_PERIOD_MS / 1000);
+      ESP_LOGW(TAG, "[PI] Sensor lost signal, starting %ds grace period",
+               static_cast<int>(PI_SENSOR_GRACE_PERIOD_MS / 1000));
     }
     return;
   }
@@ -1038,13 +1040,14 @@ void SunsterHeater::handle_automatic_mode() {
     uint32_t now = millis();
     if (time_external_temp_lost_ == 0) {
       time_external_temp_lost_ = now;
-      ESP_LOGW(TAG, "[PI] Sensor lost signal, starting %ds grace period (using last valid temp=%.1f°C)", 
-               PI_SENSOR_GRACE_PERIOD_MS / 1000, external_temperature_);
+      ESP_LOGW(TAG, "[PI] Sensor lost signal, starting %ds grace period (using last valid temp=%.1f°C)",
+               static_cast<int>(PI_SENSOR_GRACE_PERIOD_MS / 1000), external_temperature_);
     } else {
       uint32_t elapsed = now - time_external_temp_lost_;
       if (elapsed >= PI_SENSOR_GRACE_PERIOD_MS) {
         // Grace period expired - force shutdown
-        ESP_LOGW(TAG, "[PI] Sensor grace period expired (%ds), forcing shutdown", PI_SENSOR_GRACE_PERIOD_MS / 1000);
+        ESP_LOGW(TAG, "[PI] Sensor grace period expired (%ds), forcing shutdown",
+                 static_cast<int>(PI_SENSOR_GRACE_PERIOD_MS / 1000));
         if (heater_enabled_) {
           turn_off();
         }
@@ -1054,8 +1057,8 @@ void SunsterHeater::handle_automatic_mode() {
         return;
       } else {
         // Still in grace period - continue with last valid temperature
-        ESP_LOGD(TAG, "[PI] Sensor offline, using last valid temp=%.1f°C (grace period: %ds remaining)", 
-                 external_temperature_, (PI_SENSOR_GRACE_PERIOD_MS - elapsed) / 1000);
+        ESP_LOGD(TAG, "[PI] Sensor offline, using last valid temp=%.1f°C (grace period: %ds remaining)",
+                 external_temperature_, static_cast<int>((PI_SENSOR_GRACE_PERIOD_MS - elapsed) / 1000));
       }
     }
   } else if (!sensor_has_state && !sensor_has_valid_value) {
