@@ -1201,7 +1201,7 @@ void SunsterHeater::handle_automatic_mode() {
         set_power_level_percent(10.0f);
         return;
       }
-      if (!allow_auto_stop_) {
+      if (force_min_power_) {
         set_power_level_percent(10.0f);
         return;
       }

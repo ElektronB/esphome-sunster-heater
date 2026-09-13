@@ -537,13 +537,12 @@ sunster_heater:
 
 ### Climate Entity
 Die Climate-Plattform erstellt eine native Home-Assistant-Thermostat-Entity mit vollständiger Steuerung:
-- **Mode**: Aus (OFF) | Heizbetrieb (HEAT) | Lüften (FAN_ONLY, noch zu implementieren)
-- **Solltemperatur**: 5–35°C
-- **Preset**: Manual | Automatic | Antifreeze (Betriebsart)
-- **Fan Mode (Leistung)**: 10% – 100% in 10 Stufen
+- **Mode**: Aus (OFF) | Heizbetrieb (HEAT)
+- **Solltemperatur**: 5–35°C (Automatic) bzw. Leistung als Zielwert (Manual)
+- **Control Mode** (Select): Manual | Automatic | Antifreeze | Fan Only (optional)
 - **Heizstatus**: Heating/Idle/Off
 
-**Auto Start/Stop Switch** (optional): Standard ON. Bei OFF blockiert die Heizung das vollständige Ausschalten im Automatic-Modus – sie bleibt bei 10% Minimalleistung und geht nicht aus.
+**Force Min Power Switch** (optional, default ON): Bei ON hält die Heizung im Automatic-Modus mindestens 10 % und schaltet nicht vollständig aus. Bei OFF darf der PI-Regler die Heizung abschalten.
 
 **Thermostat-Karte im Dashboard:**
 ```yaml
@@ -551,9 +550,9 @@ type: thermostat
 entity: climate.van_heater  # Entity-ID ggf. in Einstellungen → Geräte prüfen
 ```
 
-**Modusabhängige Karte (Automatic → Temperatur, Manual/Lüften → Leistungs-Fader):**
+**Modusabhängige Karte (Automatic → Temperatur, Manual → Leistungs-Fader):**
 
-Im Automatic-Modus erscheint die Thermostat-Karte, in Manual- oder Lüften-Modus die Climate-Entity mit einem Leistungs-Fader (10–100%). Benötigt:
+Im Automatic-Modus erscheint die Thermostat-Karte, im Manual-Modus die Climate-Entity mit einem Leistungs-Fader (10–100%). Benötigt:
 
 1. **Template-Sensor** – [home-assistant/template-sensor.yaml](home-assistant/template-sensor.yaml) unter `template:` einbinden
 2. **Input Number** – [home-assistant/input-number.yaml](home-assistant/input-number.yaml) unter `input_number:` einbinden

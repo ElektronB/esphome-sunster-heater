@@ -183,9 +183,12 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   bool is_antifreeze_mode() const { return control_mode_ == ControlMode::ANTIFREEZE; }
   bool is_fan_only_mode() const { return control_mode_ == ControlMode::FAN_ONLY; }
 
-  // Auto start/stop: when false, PI never calls turn_off(), holds at 10% instead
-  void set_allow_auto_stop(bool allow) { allow_auto_stop_ = allow; }
-  bool get_allow_auto_stop() const { return allow_auto_stop_; }
+  // Force min power: when true (default), PI never calls turn_off(), holds at 10% instead
+  void set_force_min_power(bool force) { force_min_power_ = force; }
+  bool get_force_min_power() const { return force_min_power_; }
+  // Backward-compatible aliases
+  void set_allow_auto_stop(bool allow) { force_min_power_ = !allow; }
+  bool get_allow_auto_stop() const { return !force_min_power_; }
   float get_external_temperature() const { return external_temperature_; }
   bool has_external_sensor() const {
     return external_temperature_sensor_ != nullptr &&
@@ -265,7 +268,7 @@ class SunsterHeater : public PollingComponent, public uart::UARTDevice {
   // Control state
   bool heater_enabled_{false};
   bool automatic_master_enabled_{true};  // Power switch: when false, automatic mode won't turn on
-  bool allow_auto_stop_{true};           // When false, PI holds at 10% instead of turn_off()
+  bool force_min_power_{true};           // When true (default), PI holds at 10% instead of turn_off()
   uint8_t power_level_{8};  // 1-10 scale, default 80%
   float target_temperature_{20.0};
   HeaterState current_state_{HeaterState::OFF};
@@ -491,12 +494,12 @@ class SunsterHeaterPowerSwitch : public switch_::Switch, public Component {
   uint32_t last_sync_publish_{0};
 };
 
-// Switch: allow auto stop in Automatic mode (default ON). When OFF, heater stays at 10% instead of turning off.
-class SunsterAutoStopSwitch : public switch_::Switch, public Component {
+// Switch: force min power in Automatic mode (default ON). When ON, heater stays at 10% instead of turning off.
+class SunsterForceMinPowerSwitch : public switch_::Switch, public Component {
  public:
   void set_sunster_heater(SunsterHeater *heater) { heater_ = heater; }
   void dump_config() override {
-    LOG_SWITCH("", "Sunster Heater Auto Stop", this);
+    LOG_SWITCH("", "Sunster Heater Force Min Power", this);
   }
 
  protected:
@@ -504,13 +507,13 @@ class SunsterAutoStopSwitch : public switch_::Switch, public Component {
     Component::loop();
     if (!heater_) return;
     if (!initial_published_) {
-      this->publish_state(heater_->get_allow_auto_stop());
+      this->publish_state(heater_->get_force_min_power());
       initial_published_ = true;
     }
   }
   void write_state(bool state) override {
     if (heater_) {
-      heater_->set_allow_auto_stop(state);
+      heater_->set_force_min_power(state);
       this->publish_state(state);
     }
   }
@@ -518,6 +521,7 @@ class SunsterAutoStopSwitch : public switch_::Switch, public Component {
   SunsterHeater *heater_{nullptr};
   bool initial_published_{false};
 };
+using SunsterAutoStopSwitch = SunsterForceMinPowerSwitch;
 
 // Number component for power level control (Manual mode only)
 class SunsterHeaterPowerLevelNumber : public number::Number, public Component {

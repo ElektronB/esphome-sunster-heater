@@ -19,8 +19,6 @@ climate::ClimateTraits SunsterClimate::traits() {
   climate::ClimateTraits traits;
   traits.add_supported_mode(climate::CLIMATE_MODE_OFF);
   traits.add_supported_mode(climate::CLIMATE_MODE_HEAT);
-  traits.add_supported_mode(climate::CLIMATE_MODE_COOL);
-  traits.add_supported_mode(climate::CLIMATE_MODE_FAN_ONLY);
   traits.add_feature_flags(climate::CLIMATE_SUPPORTS_CURRENT_TEMPERATURE |
                            climate::CLIMATE_SUPPORTS_ACTION);
   traits.set_visual_min_temperature(min_temperature_);
@@ -40,17 +38,10 @@ void SunsterClimate::control(const climate::ClimateCall &call) {
         heater_->turn_off();
         break;
       case climate::CLIMATE_MODE_HEAT:
-        heater_->set_control_mode(ControlMode::AUTOMATIC);
-        heater_->set_automatic_master_enabled(true);
-        heater_->turn_on();
-        break;
-      case climate::CLIMATE_MODE_COOL:
-        heater_->set_control_mode(ControlMode::MANUAL);
-        heater_->set_automatic_master_enabled(true);
-        heater_->turn_on();
-        break;
-      case climate::CLIMATE_MODE_FAN_ONLY:
-        heater_->set_control_mode(ControlMode::FAN_ONLY);
+        // Keep current control mode (Manual/Automatic/Antifreeze); leave FAN_ONLY
+        if (heater_->get_control_mode() == ControlMode::FAN_ONLY) {
+          heater_->set_control_mode(ControlMode::AUTOMATIC);
+        }
         heater_->set_automatic_master_enabled(true);
         heater_->turn_on();
         break;
@@ -59,7 +50,7 @@ void SunsterClimate::control(const climate::ClimateCall &call) {
     }
   }
 
-  // Target temperature → temperature in AUTOMATIC, power level in MANUAL
+  // Target temperature → temperature in AUTOMATIC/ANTIFREEZE, power level in MANUAL
   if (call.get_target_temperature().has_value()) {
     float target = *call.get_target_temperature();
     ControlMode cm = heater_->get_control_mode();
@@ -82,15 +73,16 @@ void SunsterClimate::update() {
     this->current_temperature = current;
   }
 
-  // Map ControlMode + heater state to HVAC mode and action
+  // Map ControlMode + heater state to HVAC mode (only HEAT / OFF) and action
   ControlMode cmode = heater_->get_control_mode();
   bool heater_on = heater_->get_heater_enabled();
   bool is_heating = heater_->is_heating();
+  bool master_on = heater_->is_automatic_master_enabled();
 
   switch (cmode) {
     case ControlMode::AUTOMATIC:
       this->target_temperature = heater_->get_target_temperature();
-      if (heater_->is_automatic_master_enabled()) {
+      if (master_on) {
         this->mode = climate::CLIMATE_MODE_HEAT;
         this->action = is_heating ? climate::CLIMATE_ACTION_HEATING
                                   : climate::CLIMATE_ACTION_IDLE;
@@ -103,7 +95,7 @@ void SunsterClimate::update() {
     case ControlMode::MANUAL:
       this->target_temperature = heater_->get_power_level_percent();
       if (heater_on) {
-        this->mode = climate::CLIMATE_MODE_COOL;
+        this->mode = climate::CLIMATE_MODE_HEAT;
         this->action = is_heating ? climate::CLIMATE_ACTION_HEATING
                                   : climate::CLIMATE_ACTION_IDLE;
       } else {
@@ -120,9 +112,10 @@ void SunsterClimate::update() {
       break;
 
     case ControlMode::FAN_ONLY:
+      // FAN_ONLY no longer exposed as HVAC mode – show OFF/HEAT based on state
       this->target_temperature = NAN;
       if (heater_on) {
-        this->mode = climate::CLIMATE_MODE_FAN_ONLY;
+        this->mode = climate::CLIMATE_MODE_HEAT;
         this->action = climate::CLIMATE_ACTION_FAN;
       } else {
         this->mode = climate::CLIMATE_MODE_OFF;
